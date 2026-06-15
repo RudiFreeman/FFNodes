@@ -11,12 +11,14 @@ import { CommandBar } from "./widgets/CommandBar/CommandBar";
 import { useGraph } from "./features/add-node/useGraph";
 import { useInputFile } from "./features/input-file/useInputFile";
 import { useRender } from "./features/run-render/useRender";
+import { useFavorites } from "./features/favorites/useFavorites";
 import "./App.css";
 
 function App() {
   const input = useInputFile();
   const graph = useGraph(input.path);
   const render = useRender(graph.command, input.info);
+  const favorites = useFavorites();
 
   // Рендерить можно, если граф собран в команду и выбран входной файл
   const canRender = !graph.command.error && Boolean(input.path);
@@ -50,7 +52,11 @@ function App() {
           onEdgesChange={graph.onEdgesChange}
           onConnect={graph.onConnect}
         />
-        <FilterCatalog onAddFilter={graph.addFilterNode} />
+        <FilterCatalog
+          onAddFilter={graph.addFilterNode}
+          isFavorite={favorites.isFavorite}
+          onToggleFavorite={favorites.toggleFavorite}
+        />
       </div>
 
       <CommandBar command={graph.command} />

@@ -63,28 +63,29 @@ export function generateCommand(graph: Graph, inputPath?: string): GeneratedComm
   const inputForArgs = inputPath ?? PLACEHOLDER_INPUT;
   const inputForDisplay = inputPath ? fileName(inputPath) : PLACEHOLDER_INPUT;
 
-  // Собрать строки фильтров из значений параметров каждой ноды
+  // Собрать вклад каждой ноды: vf-фрагменты в цепочку + выходные опции-флаги
   const filterStrings: string[] = [];
+  const outputArgs: string[] = [];
   for (const node of ordered) {
     const def = node.filterId ? getFilterDef(node.filterId) : undefined;
     if (!def) {
       return { args: [], display: "", error: `Неизвестный фильтр: ${node.filterId}` };
     }
-    filterStrings.push(def.toFilterString(node.params));
+    const contrib = def.toCommand(node.params);
+    if (contrib.vf) filterStrings.push(contrib.vf);
+    if (contrib.outputArgs) outputArgs.push(...contrib.outputArgs);
   }
 
-  // Аргументы массивом: вход, опц. -vf, выход
+  // Порядок FFmpeg: вход → -vf → выходные опции → выход
   const args: string[] = ["-i", inputForArgs];
-  if (filterStrings.length > 0) {
-    args.push("-vf", filterStrings.join(","));
-  }
+  if (filterStrings.length > 0) args.push("-vf", filterStrings.join(","));
+  args.push(...outputArgs);
   args.push(PLACEHOLDER_OUTPUT);
 
-  // display — собираем безопасно для чтения (фильтры в кавычках)
+  // display — для чтения (vf-цепочка в кавычках)
   const parts = ["ffmpeg", "-i", inputForDisplay];
-  if (filterStrings.length > 0) {
-    parts.push("-vf", `"${filterStrings.join(",")}"`);
-  }
+  if (filterStrings.length > 0) parts.push("-vf", `"${filterStrings.join(",")}"`);
+  parts.push(...outputArgs);
   parts.push(PLACEHOLDER_OUTPUT);
 
   return { args, display: parts.join(" ") };
