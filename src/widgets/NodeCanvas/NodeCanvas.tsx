@@ -15,6 +15,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { FilterNode } from "./nodes/FilterNode";
+import { InputNode } from "./nodes/InputNode";
+import { OutputNode } from "./nodes/OutputNode";
 
 interface NodeCanvasProps {
   nodes: Node[];
@@ -32,7 +34,10 @@ export function NodeCanvas({
   onConnect,
 }: NodeCanvasProps) {
   // Регистрация кастомных типов нод (мемо — чтобы не пересоздавать каждый рендер)
-  const nodeTypes = useMemo(() => ({ filter: FilterNode }), []);
+  const nodeTypes = useMemo(
+    () => ({ filter: FilterNode, "input-file": InputNode, "output-file": OutputNode }),
+    [],
+  );
 
   return (
     <main className="relative flex-1 bg-bg">
@@ -55,11 +60,11 @@ export function NodeCanvas({
         />
       </ReactFlow>
 
-      {/* Подсказка поверх пустого холста */}
-      {nodes.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="text-sm text-fg-muted">
-            Кликни функцию в каталоге справа, чтобы добавить ноду
+      {/* Подсказка, пока на холсте только стартовая пара вход→выход (нет фильтров) */}
+      {nodes.every((n) => n.type !== "filter") && (
+        <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center">
+          <p className="rounded-md bg-surface/80 px-3 py-1.5 text-sm text-fg-muted">
+            Кликни функцию в каталоге справа — она встроится между входом и выходом
           </p>
         </div>
       )}

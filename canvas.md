@@ -1,0 +1,91 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - generic [ref=e11]: FFmpeg Visual
+      - generic [ref=e12]: проект без названия
+    - generic [ref=e13]:
+      - button "Настройки" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+        - text: Настройки
+      - button "Рендер" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+        - text: Рендер
+  - generic [ref=e21]:
+    - complementary [ref=e22]:
+      - generic [ref=e23]: Превью
+      - generic [ref=e24]:
+        - img [ref=e25]
+        - paragraph [ref=e29]:
+          - text: Перетащи сюда видео,
+          - text: чтобы начать
+    - main [ref=e30]:
+      - application [ref=e31]:
+        - generic [ref=e33]:
+          - generic:
+            - generic:
+              - img:
+                - group "Edge from input to 7ca2f4f6-3aac-41c4-a896-53919d41ac98" [ref=e93] [cursor=pointer]
+              - img:
+                - group "Edge from 7ca2f4f6-3aac-41c4-a896-53919d41ac98 to output" [ref=e96] [cursor=pointer]
+            - generic:
+              - group [ref=e34]:
+                - generic [ref=e35]:
+                  - generic [ref=e36]: Вход
+                  - generic [ref=e37]: Видеофайл
+              - group [ref=e39]:
+                - generic [ref=e40]:
+                  - generic [ref=e42]: Выход
+                  - generic [ref=e43]: Результат
+              - group [ref=e99]:
+                - generic [ref=e100]:
+                  - generic [ref=e102]: Фильтр
+                  - generic [ref=e103]: Изменить размер
+                  - generic [ref=e104]:
+                    - text: Ширина
+                    - spinbutton "Ширина" [ref=e105]: "1280"
+                  - generic [ref=e106]:
+                    - text: Высота
+                    - spinbutton "Высота" [ref=e107]: "-2"
+        - img
+        - generic "Control Panel" [ref=e44]:
+          - button "Zoom In" [ref=e45] [cursor=pointer]:
+            - img [ref=e46]
+          - button "Zoom Out" [ref=e48] [cursor=pointer]:
+            - img [ref=e49]
+          - button "Fit View" [ref=e51] [cursor=pointer]:
+            - img [ref=e52]
+          - button "Toggle Interactivity" [ref=e54] [cursor=pointer]:
+            - img [ref=e55]
+        - img "Mini Map" [ref=e58]
+    - complementary [ref=e62]:
+      - generic [ref=e63]: Каталог функций
+      - generic [ref=e65]:
+        - img [ref=e66]
+        - textbox "Поиск функции…" [ref=e69]
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - generic [ref=e72]: Размер / FPS
+          - 'button "Изменить размер Меняет разрешение видео. Зачем: уменьшить файл, подогнать под платформу (например 1080p → 720p) или соцсеть. Высота -2 сохраняет пропорции." [ref=e73] [cursor=pointer]':
+            - text: Изменить размер
+            - generic [ref=e74]: "Меняет разрешение видео. Зачем: уменьшить файл, подогнать под платформу (например 1080p → 720p) или соцсеть. Высота -2 сохраняет пропорции."
+          - 'button "Сменить частоту кадров Задаёт число кадров в секунду (FPS). Зачем: уменьшить вес (например для GIF хватает 10–15 fps) или привести к стандарту (24/30/60)." [ref=e75] [cursor=pointer]':
+            - text: Сменить частоту кадров
+            - generic [ref=e76]: "Задаёт число кадров в секунду (FPS). Зачем: уменьшить вес (например для GIF хватает 10–15 fps) или привести к стандарту (24/30/60)."
+        - generic [ref=e77]:
+          - generic [ref=e78]: Обрезка
+          - 'button "Обрезать по времени Оставляет только фрагмент между началом и концом. Зачем: вырезать нужный кусок из длинного видео без перекодирования всего." [ref=e79] [cursor=pointer]':
+            - text: Обрезать по времени
+            - generic [ref=e80]: "Оставляет только фрагмент между началом и концом. Зачем: вырезать нужный кусок из длинного видео без перекодирования всего."
+          - 'button "Кадрировать Вырезает прямоугольную область кадра. Зачем: убрать чёрные поля, сменить соотношение сторон (16:9 → 1:1 для соцсетей)." [ref=e81] [cursor=pointer]':
+            - text: Кадрировать
+            - generic [ref=e82]: "Вырезает прямоугольную область кадра. Зачем: убрать чёрные поля, сменить соотношение сторон (16:9 → 1:1 для соцсетей)."
+  - contentinfo [ref=e83]:
+    - generic [ref=e84]:
+      - button "Свернуть команду" [ref=e85] [cursor=pointer]:
+        - img [ref=e86]
+        - text: Команда
+      - code [ref=e88]: ffmpeg -i input.mp4 -vf "scale=1280:-2" output.mp4
+      - button "Скопировать команду" [ref=e89] [cursor=pointer]:
+        - img [ref=e90]
+        - text: Копировать
