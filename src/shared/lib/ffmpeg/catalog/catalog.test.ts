@@ -70,3 +70,29 @@ describe("toCommand — операции с выходными опциями (�
     expect(getFilterDef("remove_audio")!.toCommand({}).outputArgs).toEqual(["-an"]);
   });
 });
+
+describe("toCommand — новые категории (поворот/скорость/цвет/GIF)", () => {
+  it("rotate: 180° → два transpose", () => {
+    expect(getFilterDef("rotate")!.toCommand({ angle: "180°" }).vf).toBe(
+      "transpose=1,transpose=1",
+    );
+  });
+
+  it("flip: вертикально → vflip", () => {
+    expect(getFilterDef("flip")!.toCommand({ dir: "Вертикально" }).vf).toBe("vflip");
+  });
+
+  it("speed: множитель 2 → setpts=PTS/2", () => {
+    expect(getFilterDef("speed")!.toCommand({ factor: 2 }).vf).toBe("setpts=PTS/2");
+  });
+
+  it("grayscale → hue=s=0", () => {
+    expect(getFilterDef("grayscale")!.toCommand({}).vf).toBe("hue=s=0");
+  });
+
+  it("to_gif: vf-цепочка fps+scale + выход gif", () => {
+    const c = getFilterDef("to_gif")!.toCommand({ fps: 12, width: 480 });
+    expect(c.vf).toBe("fps=12,scale=480:-1:flags=lanczos");
+    expect(c.outputArgs).toEqual(["-f", "gif"]);
+  });
+});

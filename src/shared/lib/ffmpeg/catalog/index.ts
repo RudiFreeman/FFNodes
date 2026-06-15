@@ -5,6 +5,10 @@ import type { FilterDef } from "./types";
 import { scale, fps } from "./resize";
 import { trim, crop } from "./trim";
 import { compress, extractAudio, removeAudio } from "./convert";
+import { rotate, flip } from "./transform";
+import { speed } from "./speed";
+import { adjust, grayscale } from "./color";
+import { toGif } from "./gif";
 
 export type { FilterDef, FilterParam, ParamType, CommandContribution } from "./types";
 
@@ -17,6 +21,12 @@ export const CATALOG: FilterDef[] = [
   compress,
   extractAudio,
   removeAudio,
+  rotate,
+  flip,
+  speed,
+  adjust,
+  grayscale,
+  toGif,
 ];
 
 // Найти фильтр по id (для ноды на холсте)

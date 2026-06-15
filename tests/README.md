@@ -11,10 +11,10 @@
 | Что | Где | Тестов |
 |---|---|---|
 | Каталог: индекс, уникальность id, поиск, группировка | `src/shared/lib/ffmpeg/catalog/catalog.test.ts` | 5 |
-| `toCommand`: vf-фильтры (vf-строка) + операции с outputArgs (compress/аудио) | там же (table-driven) | 7 |
+| `toCommand`: vf-фильтры + outputArgs (compress/аудио) + новые (поворот/скорость/цвет/GIF) | там же (table-driven) | 12 |
 | Генератор: цепочки по связям, порядок, разрыв, цикл, пустой граф, outputArgs, комбинация, путь | `src/shared/lib/ffmpeg/generate.test.ts` | 11 |
 
-**Фронт (Vitest): 23 ✅**
+**Фронт (Vitest): 28 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
