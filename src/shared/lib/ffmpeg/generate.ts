@@ -1,7 +1,8 @@
 // Генерация FFmpeg-команды из графа. Сердце проекта — чистая функция без побочных эффектов.
 // См. docs/ARCHITECTURE.md §4. MVP: линейная цепочка input → filter… → output, опция -vf.
-import type { Graph, GraphNode } from "../../types/graph";
+import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
+import { orderedFilters } from "./chain";
 
 export interface GeneratedCommand {
   args: string[]; // аргументы для запуска (НЕ склеенная строка — защита от инъекций)
@@ -19,33 +20,7 @@ function fileName(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
-// Обойти граф от input по связям до output, вернуть filter-ноды в порядке цепочки.
-// null — если цепочка разорвана (нет пути input→output) или есть цикл.
-function orderedFilters(graph: Graph): GraphNode[] | null {
-  const input = graph.nodes.find((n) => n.kind === "input");
-  const output = graph.nodes.find((n) => n.kind === "output");
-  if (!input || !output) return null;
-
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  // следующая нода по исходящей связи (для MVP — одна связь от ноды)
-  const nextOf = (id: string) =>
-    graph.edges.find((e) => e.source === id)?.target;
-
-  const filters: GraphNode[] = [];
-  const seen = new Set<string>();
-  let current: string | undefined = nextOf(input.id);
-
-  while (current) {
-    if (seen.has(current)) return null; // цикл
-    seen.add(current);
-    if (current === output.id) return filters; // дошли до выхода — цепочка цела
-    const node = byId.get(current);
-    if (!node || node.kind !== "filter") return null;
-    filters.push(node);
-    current = nextOf(current);
-  }
-  return null; // оборвалась, не дойдя до output
-}
+// Порядок цепочки фильтров (input→output) — общая логика в chain.ts.
 
 // inputPath — реальный путь выбранного файла; если не задан, используется плейсхолдер.
 export function generateCommand(graph: Graph, inputPath?: string): GeneratedCommand {

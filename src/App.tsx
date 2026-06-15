@@ -16,12 +16,16 @@ import "./App.css";
 
 function App() {
   const input = useInputFile();
-  const graph = useGraph(input.path);
+  const graph = useGraph(input.path, input.info);
   const render = useRender(graph.command, input.info);
   const favorites = useFavorites();
 
   // Рендерить можно, если граф собран в команду и выбран входной файл
   const canRender = !graph.command.error && Boolean(input.path);
+
+  // Колонка «После» в панели: реальные метаданные после рендера (точные, вкл. размер файла),
+  // а пока не отрендерили — живое предсказание из графа.
+  const afterInfo = render.outputInfo ?? graph.predictedOutput;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-bg text-fg">
@@ -42,7 +46,8 @@ function App() {
           info={input.info}
           loading={input.loading}
           error={input.error}
-          outputInfo={render.outputInfo}
+          outputInfo={afterInfo}
+          rendered={render.outputInfo != null}
           onChoose={input.choose}
         />
         <NodeCanvas

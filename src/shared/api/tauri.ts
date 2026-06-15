@@ -2,18 +2,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import type { MediaInfo } from "../types/media";
 
-// Метаданные медиафайла (зеркало Rust-структуры MediaInfo)
-export interface MediaInfo {
-  duration: number | null;
-  width: number | null;
-  height: number | null;
-  video_codec: string | null;
-  audio_codec: string | null;
-  fps: number | null;
-  size_bytes: number | null;
-  format: string | null;
-}
+// MediaInfo живёт в shared/types/media.ts (доменный тип). Реэкспорт — чтобы существующие
+// импорты `from ".../api/tauri"` продолжали работать.
+export type { MediaInfo };
 
 // Открыть системный диалог выбора видеофайла. Возвращает путь или null (отмена).
 export async function pickInputFile(): Promise<string | null> {

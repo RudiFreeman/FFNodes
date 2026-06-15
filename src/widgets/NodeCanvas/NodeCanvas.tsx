@@ -49,6 +49,10 @@ export function NodeCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
+        // Меньший стартовый масштаб: ноды не разворачиваются на весь холст (maxZoom < 1).
+        // minZoom чуть ниже дефолта — можно отдалиться сильнее.
+        fitViewOptions={{ maxZoom: 0.75, padding: 0.3 }}
+        minZoom={0.3}
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#475569" gap={20} />
