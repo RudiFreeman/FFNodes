@@ -20,6 +20,8 @@ export function FilterCatalog({
   const [query, setQuery] = useState("");
   // Развёрнутые категории. По умолчанию ВСЕ свёрнуты (функций много) — пустое множество.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Избранное по умолчанию открыто (в отличие от категорий), но сворачивается вручную.
+  const [favOpen, setFavOpen] = useState(true);
 
   const toggle = (category: string) =>
     setExpanded((prev) => {
@@ -80,23 +82,33 @@ export function FilterCatalog({
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
-        {/* Избранное — всегда открыто, отделено полосой снизу */}
+        {/* Избранное — открыто по умолчанию, сворачивается вручную; отделено полосой снизу */}
         {favoriteItems.length > 0 && (
           <div className="mb-2 border-b border-border pb-2">
-            <div className="mb-1 flex items-center gap-1 px-1 text-xs font-medium text-accent">
+            <button
+              type="button"
+              onClick={() => setFavOpen((v) => !v)}
+              className="flex w-full items-center gap-1 rounded px-1 py-1 text-xs font-medium text-accent transition-colors hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {searching || favOpen ? (
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+              )}
               <Star className="h-3.5 w-3.5 fill-accent" aria-hidden />
               Избранное
               <span className="ml-auto text-fg-muted">{favoriteItems.length}</span>
-            </div>
-            {favoriteItems.map((def) => (
-              <CatalogItem
-                key={`fav-${def.id}`}
-                def={def}
-                isFavorite
-                onAdd={onAddFilter}
-                onToggleFavorite={onToggleFavorite}
-              />
-            ))}
+            </button>
+            {(searching || favOpen) &&
+              favoriteItems.map((def) => (
+                <CatalogItem
+                  key={`fav-${def.id}`}
+                  def={def}
+                  isFavorite
+                  onAdd={onAddFilter}
+                  onToggleFavorite={onToggleFavorite}
+                />
+              ))}
           </div>
         )}
 
