@@ -1,6 +1,7 @@
-// Состояние графа холста + добавление нод из каталога. См. docs/ARCHITECTURE.md §8.
-// На этапе каркаса связи (edges) ведём, но авто-соединение нод — в следующей итерации.
-import { useCallback } from "react";
+// Состояние графа холста + добавление нод + генерация команды. См. docs/ARCHITECTURE.md §4,§8.
+// Стартовая пара input→output; добавленный фильтр вставляется в цепочку перед output
+// и авто-связывается. Команда генерируется из доменного Graph (маппинг ниже).
+import { useCallback, useMemo } from "react";
 import {
   useNodesState,
   useEdgesState,
@@ -10,36 +11,111 @@ import {
   type Connection,
 } from "@xyflow/react";
 import type { FilterDef } from "../../shared/lib/ffmpeg/catalog";
+import type { Graph, GraphNode, ParamValue } from "../../shared/types/graph";
+import { generateCommand } from "../../shared/lib/ffmpeg/generate";
 import type { FilterNodeData } from "../../widgets/NodeCanvas/nodes/FilterNode";
 
-export function useGraph() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+// Фиксированные id стартовых нод (input/output всегда на холсте в MVP)
+const INPUT_ID = "input";
+const OUTPUT_ID = "output";
 
-  // Добавить ноду-фильтр из каталога. Раскладываем со сдвигом по числу уже имеющихся нод,
-  // чтобы новые не накладывались друг на друга.
-  const addFilterNode = useCallback(
-    (def: FilterDef) => {
-      const data: FilterNodeData = { label: def.label, filterId: def.id };
-      setNodes((prev) => {
-        const offset = prev.length % 5;
-        const node: Node = {
-          id: crypto.randomUUID(),
-          type: "filter",
-          position: { x: 120 + offset * 40, y: 80 + offset * 60 },
-          data,
-        };
-        return [...prev, node];
-      });
+// Входная и выходная ноды всегда на холсте — запрещаем их удаление (deletable: false),
+// иначе цепочку нельзя будет собрать.
+const initialNodes: Node[] = [
+  { id: INPUT_ID, type: "input-file", position: { x: 80, y: 200 }, data: {}, deletable: false },
+  { id: OUTPUT_ID, type: "output-file", position: { x: 560, y: 200 }, data: {}, deletable: false },
+];
+const initialEdges: Edge[] = [
+  { id: "input-output", source: INPUT_ID, target: OUTPUT_ID },
+];
+
+export function useGraph() {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
+
+  // Изменение параметра фильтр-ноды → пишем в её data.params
+  const onParamChange = useCallback(
+    (nodeId: string, paramId: string, value: ParamValue) => {
+      setNodes((prev) =>
+        prev.map((n) => {
+          if (n.id !== nodeId) return n;
+          const d = n.data as FilterNodeData;
+          return { ...n, data: { ...d, params: { ...d.params, [paramId]: value } } };
+        }),
+      );
     },
     [setNodes],
   );
 
-  // Соединение нод пользователем (тянем связь между хэндлами)
+  // Добавить фильтр: создаём ноду и вставляем её в цепочку прямо перед output.
+  // Перецепляем связь, которая вела в output, на новую ноду, а ноду — в output.
+  const addFilterNode = useCallback(
+    (def: FilterDef) => {
+      const newId = crypto.randomUUID();
+      const defaults: Record<string, ParamValue> = {};
+      for (const p of def.params) if (p.default !== undefined) defaults[p.id] = p.default;
+
+      const data: FilterNodeData = {
+        label: def.label,
+        filterId: def.id,
+        params: defaults,
+        onParamChange,
+      };
+
+      setNodes((prev) => {
+        const count = prev.filter((n) => n.type === "filter").length;
+        const node: Node = {
+          id: newId,
+          type: "filter",
+          position: { x: 280, y: 80 + count * 110 },
+          data,
+        };
+        return [...prev, node];
+      });
+
+      // Перецепить: то, что входило в output, теперь входит в newId; newId → output
+      setEdges((prev) => {
+        const toOutput = prev.find((e) => e.target === OUTPUT_ID);
+        const rest = prev.filter((e) => e.target !== OUTPUT_ID);
+        const prevSource = toOutput?.source ?? INPUT_ID;
+        return [
+          ...rest,
+          { id: `${prevSource}-${newId}`, source: prevSource, target: newId },
+          { id: `${newId}-${OUTPUT_ID}`, source: newId, target: OUTPUT_ID },
+        ];
+      });
+    },
+    [setNodes, setEdges, onParamChange],
+  );
+
+  // Соединение нод пользователем вручную
   const onConnect = useCallback(
     (conn: Connection) => setEdges((prev) => addEdge(conn, prev)),
     [setEdges],
   );
 
-  return { nodes, edges, onNodesChange, onEdgesChange, onConnect, addFilterNode };
+  // Маппинг состояния React Flow → доменный Graph (чистая логика не знает про UI)
+  const graph: Graph = useMemo(() => {
+    const domainNodes: GraphNode[] = nodes.map((n) => {
+      const kind =
+        n.type === "input-file" ? "input" : n.type === "output-file" ? "output" : "filter";
+      const d = n.data as Partial<FilterNodeData>;
+      return {
+        id: n.id,
+        kind,
+        filterId: d.filterId,
+        params: d.params ?? {},
+        position: n.position,
+      };
+    });
+    return {
+      nodes: domainNodes,
+      edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+    };
+  }, [nodes, edges]);
+
+  // Сгенерированная команда — обновляется при любом изменении графа
+  const command = useMemo(() => generateCommand(graph), [graph]);
+
+  return { nodes, edges, onNodesChange, onEdgesChange, onConnect, addFilterNode, command };
 }

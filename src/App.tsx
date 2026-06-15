@@ -30,7 +30,7 @@ function App() {
         <FilterCatalog onAddFilter={graph.addFilterNode} />
       </div>
 
-      <CommandBar />
+      <CommandBar command={graph.command} />
     </div>
   );
 }
