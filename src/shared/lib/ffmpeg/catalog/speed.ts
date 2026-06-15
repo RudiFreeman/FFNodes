@@ -23,4 +23,12 @@ export const speed: FilterDef = {
   ],
   // PTS делится на множитель: factor=2 → setpts=PTS/2 (быстрее)
   toCommand: (p) => ({ vf: `setpts=PTS/${p.factor}` }),
+  // Длительность делится на множитель (×2 → вдвое короче). FPS не меняется.
+  applyToInfo: (info, p) => {
+    const factor = Number(p.factor);
+    return {
+      ...info,
+      duration: info.duration != null && factor ? info.duration / factor : info.duration,
+    };
+  },
 };

@@ -13,17 +13,19 @@
 | Каталог: индекс, уникальность id, поиск, группировка | `src/shared/lib/ffmpeg/catalog/catalog.test.ts` | 5 |
 | `toCommand`: vf-фильтры + outputArgs (compress/аудио) + новые (поворот/скорость/цвет/GIF) | там же (table-driven) | 12 |
 | Генератор: цепочки по связям, порядок, разрыв, цикл, пустой граф, outputArgs, комбинация, путь | `src/shared/lib/ffmpeg/generate.test.ts` | 11 |
+| Обход цепочки `orderedFilters`: порядок по связям, пустая цепочка, нет output, разрыв, цикл | `src/shared/lib/ffmpeg/chain.test.ts` | 5 |
+| Предсказание `predictOutput`: scale/fps/trim/speed/rotate/gif/аудио, цепочка, без applyToInfo, иммутабельность | `src/shared/lib/ffmpeg/predict.test.ts` | 14 |
 
-**Фронт (Vitest): 28 ✅**
+**Фронт (Vitest): 47 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
 | Что | Где | Тестов |
 |---|---|---|
-| Разбор ответа ffprobe: дроби FPS, извлечение полей, нет аудио, мусор | `src-tauri/src/ffmpeg.rs` (`#[cfg(test)]`) | 4 |
+| Разбор ответа ffprobe: дроби FPS, полный набор полей (битрейт/профиль/aspect/pix_fmt/цвет/кадры/аудио-детали/энкодер/дата), fallback битрейта на контейнер, нет аудио, мусор | `src-tauri/src/ffmpeg.rs` (`#[cfg(test)]`) | 5 |
 | Парс прогресса рендера (`out_time_us` → секунды) | там же | 1 |
 
-**Rust: 5 ✅**
+**Rust: 6 ✅**
 
 ## 🔴 Нужно покрыть (по мере появления кода)
 

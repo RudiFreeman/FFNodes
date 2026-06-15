@@ -21,4 +21,30 @@ export const toGif: FilterDef = {
     vf: `fps=${p.fps},scale=${p.width}:-1:flags=lanczos`,
     outputArgs: ["-f", "gif"],
   }),
+  // GIF: формат gif, без звука, своя ширина (высота авто по пропорциям), свой fps
+  applyToInfo: (info, p) => {
+    const width = Number(p.width);
+    const height =
+      info.width && info.height
+        ? Math.round((info.height / info.width) * width)
+        : info.height;
+    return {
+      ...info,
+      format: "gif",
+      format_long: "GIF",
+      video_codec: "gif",
+      video_codec_long: null,
+      video_profile: null,
+      audio_codec: null,
+      audio_codec_long: null,
+      audio_bitrate: null,
+      audio_sample_rate: null,
+      audio_channels: null,
+      channel_layout: null,
+      sample_fmt: null,
+      fps: Number(p.fps),
+      width,
+      height,
+    };
+  },
 };

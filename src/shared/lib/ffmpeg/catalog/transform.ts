@@ -29,6 +29,11 @@ export const rotate: FilterDef = {
     };
     return { vf: map[String(p.angle)] ?? "transpose=1" };
   },
+  // Поворот на 90°/270° меняет ширину и высоту местами; 180° — без изменений
+  applyToInfo: (info, p) => {
+    if (p.angle === "180°") return { ...info };
+    return { ...info, width: info.height, height: info.width };
+  },
 };
 
 // Отразить (зеркало) по горизонтали или вертикали

@@ -2,6 +2,7 @@
 // Каждая запись описывает одну FFmpeg-операцию: человеческое имя, описание «что и зачем»,
 // параметры и её ВКЛАД в команду (видеофильтр в -vf и/или выходные опции-флаги).
 import type { ParamValue } from "../../../types/graph";
+import type { MediaInfo } from "../../../types/media";
 
 // Тип параметра — определяет, каким контролом его редактировать
 export type ParamType = "number" | "string" | "enum" | "boolean";
@@ -32,4 +33,8 @@ export interface FilterDef {
   params: FilterParam[];
   // Как операция вкладывается в команду из значений параметров.
   toCommand: (p: Record<string, ParamValue>) => CommandContribution;
+  // Как операция меняет характеристики медиа — для предсказания «После» (см. predict.ts).
+  // Возвращает НОВЫЙ MediaInfo (иммутабельно). Необязательно: операция без этого поля
+  // характеристики не меняет (напр. поворот на 180°, цветокоррекция, отражение).
+  applyToInfo?: (info: MediaInfo, p: Record<string, ParamValue>) => MediaInfo;
 }

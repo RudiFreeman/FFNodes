@@ -1,7 +1,7 @@
 // Состояние графа холста + добавление нод + генерация команды. См. docs/ARCHITECTURE.md §4,§8.
 // Стартовая пара input→output; добавленный фильтр вставляется в цепочку перед output
 // и авто-связывается. Команда генерируется из доменного Graph (маппинг ниже).
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   useNodesState,
   useEdgesState,
@@ -12,7 +12,9 @@ import {
 } from "@xyflow/react";
 import type { FilterDef } from "../../shared/lib/ffmpeg/catalog";
 import type { Graph, GraphNode, ParamValue } from "../../shared/types/graph";
+import type { MediaInfo } from "../../shared/types/media";
 import { generateCommand } from "../../shared/lib/ffmpeg/generate";
+import { predictOutput } from "../../shared/lib/ffmpeg/predict";
 import type { FilterNodeData } from "../../widgets/NodeCanvas/nodes/FilterNode";
 
 // Фиксированные id стартовых нод (input/output всегда на холсте в MVP)
@@ -29,7 +31,9 @@ const initialEdges: Edge[] = [
   { id: "input-output", source: INPUT_ID, target: OUTPUT_ID },
 ];
 
-export function useGraph(inputPath?: string | null) {
+// info — характеристики входного файла (ffprobe). Нода «Вход» показывает их,
+// нода «Выход» — предсказание (predictedOutput), пересчитываемое на лету из графа.
+export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
 
@@ -120,5 +124,33 @@ export function useGraph(inputPath?: string | null) {
     [graph, inputPath],
   );
 
-  return { nodes, edges, onNodesChange, onEdgesChange, onConnect, addFilterNode, command };
+  // Предсказанные характеристики результата — пересчитываются на лету из графа и входа
+  const predictedOutput = useMemo(
+    () => predictOutput(graph, info ?? null),
+    [graph, info],
+  );
+
+  // Синхронизировать характеристики в data стартовых нод (вход — info, выход — предсказание),
+  // чтобы InputNode/OutputNode их отрисовали. По аналогии с onParamChange (пишем в data).
+  useEffect(() => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.type === "input-file") return { ...n, data: { ...n.data, info: info ?? null } };
+        if (n.type === "output-file")
+          return { ...n, data: { ...n.data, info: predictedOutput } };
+        return n;
+      }),
+    );
+  }, [info, predictedOutput, setNodes]);
+
+  return {
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    addFilterNode,
+    command,
+    predictedOutput,
+  };
 }
