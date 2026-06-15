@@ -74,6 +74,38 @@ describe("generateCommand — линейная цепочка по связям"
     expect(r.display).toBe("ffmpeg -i input.mp4 output.mp4");
   });
 
+  it("операция с выходными опциями: compress → -c:v -crf после -vf", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "scale", { width: 1280, height: -2 }),
+        node("f2", "filter", "compress", { crf: 23 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "f2"), edge("f2", "out")],
+    };
+    const r = generateCommand(graph);
+    expect(r.error).toBeUndefined();
+    // vf только от scale; compress даёт выходные опции
+    expect(r.display).toBe(
+      'ffmpeg -i input.mp4 -vf "scale=1280:-2" -c:v libx264 -crf 23 output.mp4',
+    );
+  });
+
+  it("только выходные опции (без vf): извлечь аудио", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "extract_audio", {}),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    expect(generateCommand(graph).display).toBe(
+      "ffmpeg -i input.mp4 -vn -c:a copy output.mp4",
+    );
+  });
+
   it("реальный путь: args — полный путь, display — короткое имя", () => {
     const graph: Graph = {
       nodes: [

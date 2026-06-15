@@ -15,7 +15,7 @@ export const trim: FilterDef = {
     { id: "start", label: "Начало (сек)", type: "number", default: 0 },
     { id: "end", label: "Конец (сек)", type: "number", default: 10 },
   ],
-  toFilterString: (p) => `trim=start=${p.start}:end=${p.end}`,
+  toCommand: (p) => ({ vf: `trim=start=${p.start}:end=${p.end}` }),
 };
 
 // Кадрировать (обрезать края)
@@ -30,5 +30,5 @@ export const crop: FilterDef = {
     { id: "w", label: "Ширина области", type: "number", default: 640 },
     { id: "h", label: "Высота области", type: "number", default: 640 },
   ],
-  toFilterString: (p) => `crop=${p.w}:${p.h}`,
+  toCommand: (p) => ({ vf: `crop=${p.w}:${p.h}` }),
 };

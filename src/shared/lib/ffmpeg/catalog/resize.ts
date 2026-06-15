@@ -21,7 +21,7 @@ export const scale: FilterDef = {
       hint: "-2 = авто по пропорциям",
     },
   ],
-  toFilterString: (p) => `scale=${p.width}:${p.height}`,
+  toCommand: (p) => ({ vf: `scale=${p.width}:${p.height}` }),
 };
 
 // Сменить частоту кадров
@@ -35,5 +35,5 @@ export const fps: FilterDef = {
   params: [
     { id: "value", label: "Кадров в секунду", type: "number", default: 30 },
   ],
-  toFilterString: (p) => `fps=${p.value}`,
+  toCommand: (p) => ({ vf: `fps=${p.value}` }),
 };

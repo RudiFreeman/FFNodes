@@ -4,11 +4,20 @@
 import type { FilterDef } from "./types";
 import { scale, fps } from "./resize";
 import { trim, crop } from "./trim";
+import { compress, extractAudio, removeAudio } from "./convert";
 
-export type { FilterDef, FilterParam, ParamType } from "./types";
+export type { FilterDef, FilterParam, ParamType, CommandContribution } from "./types";
 
-// Все доступные фильтры
-export const CATALOG: FilterDef[] = [scale, fps, trim, crop];
+// Все доступные операции каталога
+export const CATALOG: FilterDef[] = [
+  scale,
+  fps,
+  trim,
+  crop,
+  compress,
+  extractAudio,
+  removeAudio,
+];
 
 // Найти фильтр по id (для ноды на холсте)
 export function getFilterDef(id: string): FilterDef | undefined {
