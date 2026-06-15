@@ -12,6 +12,13 @@ export interface GeneratedCommand {
 const PLACEHOLDER_INPUT = "input.mp4";
 const PLACEHOLDER_OUTPUT = "output.mp4";
 
+// Имя файла из пути для читаемого display (кроссплатформенно). Логика дублирует
+// shared/lib/format.basename, но generate.ts — чистый модуль без зависимостей от UI-утилит.
+function fileName(path: string): string {
+  const parts = path.split(/[/\\]/);
+  return parts[parts.length - 1] || path;
+}
+
 // Обойти граф от input по связям до output, вернуть filter-ноды в порядке цепочки.
 // null — если цепочка разорвана (нет пути input→output) или есть цикл.
 function orderedFilters(graph: Graph): GraphNode[] | null {
@@ -40,7 +47,8 @@ function orderedFilters(graph: Graph): GraphNode[] | null {
   return null; // оборвалась, не дойдя до output
 }
 
-export function generateCommand(graph: Graph): GeneratedCommand {
+// inputPath — реальный путь выбранного файла; если не задан, используется плейсхолдер.
+export function generateCommand(graph: Graph, inputPath?: string): GeneratedCommand {
   const ordered = orderedFilters(graph);
 
   if (ordered === null) {
@@ -50,6 +58,10 @@ export function generateCommand(graph: Graph): GeneratedCommand {
       error: "Соедини ноды: вход → фильтры → выход",
     };
   }
+
+  // Для args — полный путь (запуск); для display — короткое имя файла (читаемость)
+  const inputForArgs = inputPath ?? PLACEHOLDER_INPUT;
+  const inputForDisplay = inputPath ? fileName(inputPath) : PLACEHOLDER_INPUT;
 
   // Собрать строки фильтров из значений параметров каждой ноды
   const filterStrings: string[] = [];
@@ -62,14 +74,14 @@ export function generateCommand(graph: Graph): GeneratedCommand {
   }
 
   // Аргументы массивом: вход, опц. -vf, выход
-  const args: string[] = ["-i", PLACEHOLDER_INPUT];
+  const args: string[] = ["-i", inputForArgs];
   if (filterStrings.length > 0) {
     args.push("-vf", filterStrings.join(","));
   }
   args.push(PLACEHOLDER_OUTPUT);
 
   // display — собираем безопасно для чтения (фильтры в кавычках)
-  const parts = ["ffmpeg", "-i", PLACEHOLDER_INPUT];
+  const parts = ["ffmpeg", "-i", inputForDisplay];
   if (filterStrings.length > 0) {
     parts.push("-vf", `"${filterStrings.join(",")}"`);
   }
