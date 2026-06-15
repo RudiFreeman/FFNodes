@@ -117,8 +117,10 @@ fn parse_progress_seconds(line: &str) -> Option<f64> {
 // duration_sec — длительность входа (из probe_media) для расчёта процента; может быть None.
 // 🔒 ffmpeg вызывается напрямую, аргументы — массивом (без shell). Прогресс идёт событиями
 //    "render-progress" (0..100), завершение — "render-done" / ошибка как Err.
+// ВАЖНО: команда async — иначе Tauri выполняет её на главном потоке и НЕ доставляет события
+//    в webview до возврата (прогресс приходил бы пачкой в конце вместо роста по ходу).
 #[tauri::command]
-pub fn run_ffmpeg(
+pub async fn run_ffmpeg(
     app: tauri::AppHandle,
     args: Vec<String>,
     duration_sec: Option<f64>,
