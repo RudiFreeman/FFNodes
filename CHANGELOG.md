@@ -4,6 +4,21 @@
 
 ## [Не выпущено]
 
+### Каталог фильтров + добавление нод (этап «catalog-nodes»)
+- Модель данных графа — `src/shared/types/graph.ts` (`GraphNode`/`GraphEdge`/`Graph`,
+  с заделом под multi-input через `sourceHandle`/`targetHandle`).
+- Каталог фильтров как ДАННЫЕ (`src/shared/lib/ffmpeg/catalog/`): типы `FilterDef`/`FilterParam`,
+  4 фильтра с человеческими описаниями (изменить размер, сменить FPS, обрезать, кадрировать),
+  у каждого — `toFilterString`. Индекс с `getFilterDef`/`catalogByCategory`.
+- `FilterCatalog` рендерится из каталога-данных (категории, поиск по имени/описанию,
+  описание «что и зачем» под пунктом); клик добавляет ноду.
+- `useGraph` (feature `add-node`) — состояние нод/связей React Flow + `addFilterNode`;
+  id через `crypto.randomUUID()`, позиция со сдвигом по числу нод.
+- Кастомная нода `FilterNode` (фиолетовая, цвет по типу из UI.md) с хэндлами.
+- Тесты каталога — Vitest (9 ✅), реестр в `tests/README.md`.
+- Проверено вживую (Playwright): клик в каталоге → нода на холсте, ошибок в консоли нет.
+- Фикс N-002: заголовок окна → «FFmpeg Visual». N-001 (стиль контролов React Flow) — в CODE_NOTES.
+
 ### Каркас приложения (этап «scaffold»)
 - Поднят каркас на Tauri 2 + React 19 + TypeScript (шаблон `create-tauri-app`, Vite).
 - Подключены React Flow (`@xyflow/react`), Tailwind CSS v3, Lucide (иконки).

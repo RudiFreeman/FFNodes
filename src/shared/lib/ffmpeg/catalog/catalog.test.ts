@@ -1,0 +1,51 @@
+// Тесты каталога фильтров. Чистая логика — table-driven (см. docs/ARCHITECTURE.md §9).
+import { describe, it, expect } from "vitest";
+import { CATALOG, getFilterDef, catalogByCategory } from "./index";
+
+describe("catalog index", () => {
+  it("содержит фильтры", () => {
+    expect(CATALOG.length).toBeGreaterThan(0);
+  });
+
+  it("у каждого фильтра есть id, label, описание и параметры", () => {
+    for (const def of CATALOG) {
+      expect(def.id).toBeTruthy();
+      expect(def.label).toBeTruthy();
+      expect(def.description.length).toBeGreaterThan(10); // описание «что и зачем»
+      expect(Array.isArray(def.params)).toBe(true);
+    }
+  });
+
+  it("id фильтров уникальны", () => {
+    const ids = CATALOG.map((f) => f.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("getFilterDef находит по id и возвращает undefined для несуществующего", () => {
+    expect(getFilterDef("scale")?.label).toBe("Изменить размер");
+    expect(getFilterDef("no-such-filter")).toBeUndefined();
+  });
+
+  it("catalogByCategory группирует без потери фильтров", () => {
+    const total = catalogByCategory().reduce((n, g) => n + g.items.length, 0);
+    expect(total).toBe(CATALOG.length);
+  });
+});
+
+describe("toFilterString — граф значений → строка фильтра FFmpeg", () => {
+  // table-driven: id фильтра + значения параметров → ожидаемая строка
+  const cases: { id: string; params: Record<string, string | number>; expected: string }[] = [
+    { id: "scale", params: { width: 1280, height: -2 }, expected: "scale=1280:-2" },
+    { id: "fps", params: { value: 15 }, expected: "fps=15" },
+    { id: "trim", params: { start: 0, end: 10 }, expected: "trim=start=0:end=10" },
+    { id: "crop", params: { w: 640, h: 640 }, expected: "crop=640:640" },
+  ];
+
+  for (const c of cases) {
+    it(`${c.id} → ${c.expected}`, () => {
+      const def = getFilterDef(c.id);
+      expect(def).toBeDefined();
+      expect(def!.toFilterString(c.params)).toBe(c.expected);
+    });
+  }
+});
