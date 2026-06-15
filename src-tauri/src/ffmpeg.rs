@@ -1,7 +1,9 @@
 // Команды для работы с FFmpeg/ffprobe. См. docs/ARCHITECTURE.md §6.
 // 🔒 Безопасность: бинарник запускаем напрямую (Command), НЕ через shell — нет инъекций
 //    даже если в пути файла спецсимволы. Аргументы передаём массивом.
-use std::process::Command;
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
+use tauri::Emitter;
 
 // Метаданные медиафайла (отдаём во фронт). Поля опциональны — не все файлы их имеют.
 #[derive(serde::Serialize)]
@@ -103,6 +105,64 @@ fn parse_probe_json(bytes: &[u8]) -> Result<MediaInfo, String> {
     })
 }
 
+// Из строки прогресса FFmpeg (`-progress`) достать обработанное время в секундах.
+// FFmpeg пишет строки вида `out_time_us=12345678` (микросекунды). Возвращаем секунды.
+fn parse_progress_seconds(line: &str) -> Option<f64> {
+    let value = line.strip_prefix("out_time_us=")?;
+    let us: f64 = value.trim().parse().ok()?;
+    Some(us / 1_000_000.0)
+}
+
+// Запустить FFmpeg с переданными аргументами и стримить прогресс во фронт.
+// duration_sec — длительность входа (из probe_media) для расчёта процента; может быть None.
+// 🔒 ffmpeg вызывается напрямую, аргументы — массивом (без shell). Прогресс идёт событиями
+//    "render-progress" (0..100), завершение — "render-done" / ошибка как Err.
+// ВАЖНО: команда async — иначе Tauri выполняет её на главном потоке и НЕ доставляет события
+//    в webview до возврата (прогресс приходил бы пачкой в конце вместо роста по ходу).
+#[tauri::command]
+pub async fn run_ffmpeg(
+    app: tauri::AppHandle,
+    args: Vec<String>,
+    duration_sec: Option<f64>,
+) -> Result<(), String> {
+    // Добавляем машинный прогресс в stdout и подавляем обычную статистику
+    let mut full_args: Vec<String> = vec!["-y".into(), "-progress".into(), "pipe:1".into(), "-nostats".into()];
+    full_args.extend(args);
+
+    let mut child = Command::new("ffmpeg")
+        .args(&full_args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Не удалось запустить ffmpeg: {e}. Установлен ли FFmpeg?"))?;
+
+    // Читаем прогресс построчно из stdout
+    if let Some(stdout) = child.stdout.take() {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines().map_while(Result::ok) {
+            if let Some(done_sec) = parse_progress_seconds(&line) {
+                let percent = match duration_sec {
+                    Some(total) if total > 0.0 => ((done_sec / total) * 100.0).clamp(0.0, 100.0),
+                    _ => 0.0,
+                };
+                let _ = app.emit("render-progress", percent);
+            }
+        }
+    }
+
+    let status = child
+        .wait()
+        .map_err(|e| format!("Ошибка ожидания ffmpeg: {e}"))?;
+
+    if status.success() {
+        let _ = app.emit("render-progress", 100.0_f64);
+        let _ = app.emit("render-done", ());
+        Ok(())
+    } else {
+        Err("ffmpeg завершился с ошибкой при рендере".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +206,13 @@ mod tests {
     #[test]
     fn parse_probe_json_rejects_garbage() {
         assert!(parse_probe_json(b"not json").is_err());
+    }
+
+    #[test]
+    fn parse_progress_seconds_works() {
+        assert_eq!(parse_progress_seconds("out_time_us=12345678"), Some(12.345678));
+        assert_eq!(parse_progress_seconds("out_time_us=0"), Some(0.0));
+        assert_eq!(parse_progress_seconds("frame=42"), None); // другая строка прогресса
+        assert_eq!(parse_progress_seconds("out_time_us=abc"), None);
     }
 }
