@@ -28,7 +28,10 @@ function App() {
         rendering={render.status === "running"}
         canRender={canRender}
       />
-      <ProgressBar visible={render.status === "running"} percent={render.percent} />
+      <ProgressBar
+        visible={render.status === "running" || render.status === "done"}
+        percent={render.percent}
+      />
 
       {/* Средний ряд: превью | холст | каталог */}
       <div className="flex min-h-0 flex-1">
@@ -37,6 +40,7 @@ function App() {
           info={input.info}
           loading={input.loading}
           error={input.error}
+          outputInfo={render.outputInfo}
           onChoose={input.choose}
         />
         <NodeCanvas

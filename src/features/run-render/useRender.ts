@@ -4,6 +4,7 @@ import {
   pickOutputFile,
   runFfmpeg,
   onRenderProgress,
+  probeMedia,
   type MediaInfo,
 } from "../../shared/api/tauri";
 import type { GeneratedCommand } from "../../shared/lib/ffmpeg/generate";
@@ -15,6 +16,8 @@ export function useRender(command: GeneratedCommand, info: MediaInfo | null) {
   const [status, setStatus] = useState<RenderStatus>("idle");
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [outputPath, setOutputPath] = useState<string | null>(null);
+  const [outputInfo, setOutputInfo] = useState<MediaInfo | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   // Снять подписку на прогресс при размонтировании
@@ -35,17 +38,25 @@ export function useRender(command: GeneratedCommand, info: MediaInfo | null) {
     const args = [...command.args];
     args[args.length - 1] = outPath;
 
+    // Подписку ставим ДО запуска — иначе теряются ранние события быстрого рендера
+    unlistenRef.current = await onRenderProgress((p) => setPercent(p));
+
     setStatus("running");
     setPercent(0);
     setError(null);
-
-    // Подписка на прогресс
-    unlistenRef.current = await onRenderProgress((p) => setPercent(p));
+    setOutputInfo(null); // сбросить прошлый результат — пока не отрендерили новый
 
     try {
       await runFfmpeg(args, info?.duration ?? null);
       setPercent(100);
       setStatus("done");
+      setOutputPath(outPath);
+      // Прозондировать результат — метаданные «После» для сравнения с входом
+      try {
+        setOutputInfo(await probeMedia(outPath));
+      } catch {
+        setOutputInfo(null); // не критично, если ffprobe не смог
+      }
     } catch (e) {
       setError(String(e));
       setStatus("error");
@@ -55,5 +66,5 @@ export function useRender(command: GeneratedCommand, info: MediaInfo | null) {
     }
   }, [command, info]);
 
-  return { status, percent, error, render };
+  return { status, percent, error, outputPath, outputInfo, render };
 }
