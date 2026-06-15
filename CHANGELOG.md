@@ -4,6 +4,21 @@
 
 ## [Не выпущено]
 
+### Рендер + линия прогресса (этап «render») — полный цикл «файл → результат»
+- **Rust `run_ffmpeg`:** запускает FFmpeg (🔒 напрямую, args массивом) с `-progress pipe:1`,
+  парсит `out_time_us` (чистая `parse_progress_seconds`, +1 тест), стримит процент во фронт
+  событиями `render-progress`/`render-done`. Учитывает длительность входа для расчёта %.
+- **Фронт:** `shared/api/tauri.ts` (+`pickOutputFile` save-диалог, `runFfmpeg`, `onRenderProgress`),
+  `features/run-render/useRender` (статус idle/running/done/error, подписка на прогресс,
+  подстановка выбранного выходного пути в args).
+- **UI:** кнопка «Рендер» оживлена (onClick, спиннer, disabled без файла/при ошибке графа);
+  `widgets/ProgressBar` — тонкая зелёная линия под TopBar, видна только во время рендера.
+- 🔒 security-review: серьёзных дыр нет (прямой запуск, пути из системных диалогов).
+  N-004 расширен на run_ffmpeg; N-005 (нет отмены рендера) добавлен в CODE_NOTES.
+- ⚠️ Полный клик (Рендер → save-диалог → файл) проверяется вручную (нативный диалог);
+  команда+прогресс доказаны прогоном на реальном Test_video.mov (640×1138, 30fps, 51→22 МБ,
+  `out_time_us`+`progress=end` как ожидает парсер).
+
 ### Выбор файла + метаданные (этап «file-probe», первый Rust-код)
 - **Rust-сторона:** модуль `src-tauri/src/ffmpeg.rs` — команда `probe_media(path)` вызывает
   `ffprobe` (🔒 напрямую, путь отдельным аргументом — без shell-инъекций), парсит JSON в
