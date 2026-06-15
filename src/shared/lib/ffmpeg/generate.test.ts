@@ -73,6 +73,22 @@ describe("generateCommand — линейная цепочка по связям"
     expect(r.error).toBeUndefined();
     expect(r.display).toBe("ffmpeg -i input.mp4 output.mp4");
   });
+
+  it("реальный путь: args — полный путь, display — короткое имя", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "fps", { value: 24 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    const r = generateCommand(graph, "/Users/me/My Videos/clip.mov");
+    // args содержит полный путь (для запуска)
+    expect(r.args).toContain("/Users/me/My Videos/clip.mov");
+    // display — короткое имя (для читаемости)
+    expect(r.display).toBe('ffmpeg -i clip.mov -vf "fps=24" output.mp4');
+  });
 });
 
 describe("generateCommand — неполный граф → ошибка, не падение", () => {

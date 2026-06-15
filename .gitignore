@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Тестовые медиафайлы (не коммитим — тяжёлые)
+Test_video.mov
+*.mov
+*.mp4
+!public/**

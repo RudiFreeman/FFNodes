@@ -8,10 +8,12 @@ import { NodeCanvas } from "./widgets/NodeCanvas/NodeCanvas";
 import { FilterCatalog } from "./widgets/FilterCatalog/FilterCatalog";
 import { CommandBar } from "./widgets/CommandBar/CommandBar";
 import { useGraph } from "./features/add-node/useGraph";
+import { useInputFile } from "./features/input-file/useInputFile";
 import "./App.css";
 
 function App() {
-  const graph = useGraph();
+  const input = useInputFile();
+  const graph = useGraph(input.path);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-bg text-fg">
@@ -19,7 +21,13 @@ function App() {
 
       {/* Средний ряд: превью | холст | каталог */}
       <div className="flex min-h-0 flex-1">
-        <PreviewPanel />
+        <PreviewPanel
+          path={input.path}
+          info={input.info}
+          loading={input.loading}
+          error={input.error}
+          onChoose={input.choose}
+        />
         <NodeCanvas
           nodes={graph.nodes}
           edges={graph.edges}

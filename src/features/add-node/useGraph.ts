@@ -29,7 +29,7 @@ const initialEdges: Edge[] = [
   { id: "input-output", source: INPUT_ID, target: OUTPUT_ID },
 ];
 
-export function useGraph() {
+export function useGraph(inputPath?: string | null) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
 
@@ -114,8 +114,11 @@ export function useGraph() {
     };
   }, [nodes, edges]);
 
-  // Сгенерированная команда — обновляется при любом изменении графа
-  const command = useMemo(() => generateCommand(graph), [graph]);
+  // Сгенерированная команда — обновляется при изменении графа или выбранного файла
+  const command = useMemo(
+    () => generateCommand(graph, inputPath ?? undefined),
+    [graph, inputPath],
+  );
 
   return { nodes, edges, onNodesChange, onEdgesChange, onConnect, addFilterNode, command };
 }
