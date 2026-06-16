@@ -164,6 +164,7 @@ interface FilterDef {
 |---|---|
 | `probe_media(path)` | вызывает `ffprobe` → метаданные (длительность, разрешение, кодеки) для превью |
 | `run_ffmpeg(args)` | запускает FFmpeg как процесс, стримит прогресс/лог обратно в UI |
+| `extract_frame(input_path, vf, at_sec)` | FFmpeg `-frames:v 1` → JPG в temp-папке для превью-кадра; `vf` (из генератора) даёт кадр «После», без него — «До». Возвращает путь; webview читает через asset-протокол |
 | `pick_input_file()` | системный диалог выбора файла |
 | `find_ffmpeg()` | ищет бинарник FFmpeg (системный или бандленный) |
 
@@ -172,6 +173,8 @@ interface FilterDef {
   даже если в имени файла или параметре спецсимволы.
 - Пути валидируем; не даём произвольной команде уйти в shell.
 - Tauri allowlist: разрешаем только нужные возможности (запуск конкретного бинарника, выбранные пути).
+- Asset-протокол (превью-кадр) включён с **узким scope** `**/ffmpeg-visual-frame-*.jpg` —
+  webview читает только наши кадры в temp, не произвольные файлы на диске.
 
 ---
 
@@ -180,6 +183,9 @@ interface FilterDef {
 - FFmpeg пишет прогресс в stderr (`frame=`, `time=`). Rust парсит → шлёт события в UI (прогресс-бар на `Render`).
 - По завершении — путь к результату → `PreviewPanel` показывает «после» (переключатель до/после).
 - `probe_media` на входе → сразу показываем «до» и метаданные.
+- **Превью-кадр:** `extract_frame` рендерит JPG-кадр (FFmpeg). «До» — из исходника при выборе
+  файла; «После» — тот же момент через vf-цепочку графа (`videoFilterChain`), пересчёт с
+  дебаунсом в хуке `usePreviewFrame`. Видеоплеер с проигрыванием — отдельный будущий этап.
 
 ---
 
@@ -190,12 +196,13 @@ src/
 ├── app/                      # точка входа, провайдеры, тема
 ├── widgets/
 │   ├── NodeCanvas/           # холст React Flow
-│   ├── PreviewPanel/         # плеер до/после
+│   ├── PreviewPanel/         # плеер до/после + FramePreview (кадр + переключатель)
 │   ├── FilterCatalog/        # каталог справа
 │   └── CommandBar/           # редактируемая команда внизу
 ├── features/
 │   ├── add-node/             # добавление ноды из каталога на холст
 │   ├── edit-params/          # редактирование параметров ноды
+│   ├── preview-frame/        # usePreviewFrame — кадры «До»/«После» (extract_frame + дебаунс)
 │   └── run-render/           # запуск рендера, прогресс
 └── shared/
     ├── types/graph.ts        # модель графа
@@ -205,11 +212,12 @@ src/
     │   ├── chain.ts          # обход цепочки input→output (общий для generate/predict)
     │   ├── generate.ts       # граф → команда (чистые функции)
     │   ├── predict.ts        # граф + вход → характеристики результата (чистые функции)
+    │   ├── frame.ts          # граф → vf-цепочка для превью-кадра (videoFilterChain)
     │   └── validate.ts       # проверка графа
     ├── api/tauri.ts          # обёртки над invoke()
     └── ui/                    # атомы (кнопки, поля, MediaSummary)
 
-src-tauri/                    # Rust: run_ffmpeg, probe_media, file pickers
+src-tauri/                    # Rust: run_ffmpeg, probe_media, extract_frame, file pickers
 ```
 
 ---

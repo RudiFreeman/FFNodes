@@ -8,7 +8,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             ffmpeg::probe_media,
-            ffmpeg::run_ffmpeg
+            ffmpeg::run_ffmpeg,
+            ffmpeg::extract_frame
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

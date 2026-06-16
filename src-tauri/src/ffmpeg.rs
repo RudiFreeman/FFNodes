@@ -161,6 +161,63 @@ fn parse_probe_json(bytes: &[u8]) -> Result<MediaInfo, String> {
     })
 }
 
+// Собрать аргументы ffmpeg для извлечения одного кадра. Отделено от запуска процесса —
+// тестируемо. -ss до -i = быстрый seek по ключевым кадрам; -frames:v 1 = один кадр;
+// -q:v 3 = хорошее JPEG-качество; vf (если задан) — наша цепочка фильтров из графа.
+// out_path — куда писать кадр (JPG во временной папке).
+fn build_frame_args(input_path: &str, vf: Option<&str>, at_sec: f64, out_path: &str) -> Vec<String> {
+    let mut args: Vec<String> = vec![
+        "-y".into(),
+        "-ss".into(),
+        format!("{at_sec}"),
+        "-i".into(),
+        input_path.into(),
+        "-frames:v".into(),
+        "1".into(),
+        "-q:v".into(),
+        "3".into(),
+    ];
+    if let Some(filters) = vf {
+        if !filters.is_empty() {
+            args.push("-vf".into());
+            args.push(filters.into());
+        }
+    }
+    args.push(out_path.into());
+    args
+}
+
+// Извлечь один кадр из видео в JPG (для превью «До»/«После»). Возвращает путь к кадру.
+// vf — цепочка фильтров из нашего генератора (для «После»); None/пусто — кадр исходника.
+// 🔒 Безопасность: ffmpeg вызывается напрямую (Command), путь и vf — отдельными аргументами
+//    массива, не через shell. vf приходит из генератора команды (generate.ts), не из сырого
+//    пользовательского ввода. Кадр пишем в temp-папку ОС (кроссплатформенно).
+#[tauri::command]
+pub fn extract_frame(input_path: String, vf: Option<String>, at_sec: f64) -> Result<String, String> {
+    // Уникальное имя по наносекундам — чтобы «До» и «После» не перетирали друг друга и
+    // браузер не кэшировал старый кадр под тем же путём.
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let mut out = std::env::temp_dir();
+    out.push(format!("ffmpeg-visual-frame-{stamp}.jpg"));
+    let out_path = out.to_string_lossy().to_string();
+
+    let args = build_frame_args(&input_path, vf.as_deref(), at_sec, &out_path);
+
+    let output = Command::new("ffmpeg")
+        .args(&args)
+        .output()
+        .map_err(|e| format!("Не удалось запустить ffmpeg: {e}. Установлен ли FFmpeg?"))?;
+
+    if !output.status.success() {
+        return Err("ffmpeg не смог извлечь кадр".to_string());
+    }
+
+    Ok(out_path)
+}
+
 // Из строки прогресса FFmpeg (`-progress`) достать обработанное время в секундах.
 // FFmpeg пишет строки вида `out_time_us=12345678` (микросекунды). Возвращаем секунды.
 fn parse_progress_seconds(line: &str) -> Option<f64> {
@@ -294,6 +351,34 @@ mod tests {
     #[test]
     fn parse_probe_json_rejects_garbage() {
         assert!(parse_probe_json(b"not json").is_err());
+    }
+
+    #[test]
+    fn build_frame_args_with_filters() {
+        let args = build_frame_args("/tmp/in.mov", Some("scale=640:-1"), 1.5, "/tmp/out.jpg");
+        assert_eq!(
+            args,
+            vec![
+                "-y", "-ss", "1.5", "-i", "/tmp/in.mov",
+                "-frames:v", "1", "-q:v", "3",
+                "-vf", "scale=640:-1", "/tmp/out.jpg",
+            ]
+        );
+    }
+
+    #[test]
+    fn build_frame_args_without_filters() {
+        // Без vf (кадр исходника) — флаг -vf не добавляем
+        let args = build_frame_args("/tmp/in.mov", None, 0.0, "/tmp/out.jpg");
+        assert!(!args.iter().any(|a| a == "-vf"));
+        assert_eq!(args.last().unwrap(), "/tmp/out.jpg");
+    }
+
+    #[test]
+    fn build_frame_args_empty_filters_omitted() {
+        // Пустая строка vf не должна добавлять флаг -vf
+        let args = build_frame_args("/tmp/in.mov", Some(""), 0.0, "/tmp/out.jpg");
+        assert!(!args.iter().any(|a| a == "-vf"));
     }
 
     #[test]

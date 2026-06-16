@@ -12,6 +12,7 @@ import { useGraph } from "./features/add-node/useGraph";
 import { useInputFile } from "./features/input-file/useInputFile";
 import { useRender } from "./features/run-render/useRender";
 import { useFavorites } from "./features/favorites/useFavorites";
+import { usePreviewFrame } from "./features/preview-frame/usePreviewFrame";
 import "./App.css";
 
 function App() {
@@ -19,6 +20,8 @@ function App() {
   const graph = useGraph(input.path, input.info);
   const render = useRender(graph.command, input.info);
   const favorites = useFavorites();
+  // Кадры превью «До»/«После» из исходника и vf-цепочки графа
+  const frame = usePreviewFrame(input.path, graph.graph, input.info?.duration ?? null);
 
   // Рендерить можно, если граф собран в команду и выбран входной файл
   const canRender = !graph.command.error && Boolean(input.path);
@@ -48,6 +51,7 @@ function App() {
           error={input.error}
           outputInfo={afterInfo}
           rendered={render.outputInfo != null}
+          frame={frame}
           onChoose={input.choose}
         />
         <NodeCanvas
