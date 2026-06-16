@@ -2,6 +2,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { safePath } from "../lib/ffmpeg/safePath";
 import type { MediaInfo } from "../types/media";
 
 // MediaInfo живёт в shared/types/media.ts (доменный тип). Реэкспорт — чтобы существующие
@@ -20,7 +21,8 @@ export async function pickInputFile(): Promise<string | null> {
       },
     ],
   });
-  return typeof selected === "string" ? selected : null;
+  // N-004: путь, начинающийся с «-», ffmpeg примет за флаг — префиксуем ./ (safePath)
+  return typeof selected === "string" ? safePath(selected) : null;
 }
 
 // Получить метаданные файла через ffprobe (Rust-команда probe_media)
@@ -34,7 +36,8 @@ export async function pickOutputFile(defaultName: string): Promise<string | null
     defaultPath: defaultName,
     filters: [{ name: "Видео", extensions: ["mp4", "mov", "mkv", "webm", "gif"] }],
   });
-  return selected ?? null;
+  // N-004: выходной путь тоже защищаем от трактовки как флаг
+  return selected ? safePath(selected) : null;
 }
 
 // Подписаться на прогресс рендера (0..100). Возвращает функцию отписки.
