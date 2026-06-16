@@ -8,6 +8,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // Общее состояние текущего рендера — чтобы cancel_render мог убить процесс
         .manage(ffmpeg::RenderState::default())
+        // При старте чистим превью-кадры от прошлых сессий (N-011): keep=0 — удалить все
+        .setup(|_app| {
+            ffmpeg::cleanup_old_frames(0);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             ffmpeg::probe_media,
             ffmpeg::run_ffmpeg,
