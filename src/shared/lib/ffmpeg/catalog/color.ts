@@ -22,6 +22,28 @@ export const adjust: FilterDef = {
   streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
 };
 
+// Повышение резкости через фильтр unsharp
+export const sharpen: FilterDef = {
+  id: "sharpen",
+  category: CATEGORY,
+  label: "Резкость",
+  description:
+    "Повышает чёткость деталей (фильтр unsharp). Зачем: вытянуть слегка мягкую картинку. " +
+    "Сила: 0.5 — лёгкая, 1.5 — заметная. Слишком большая даёт «звон» по краям и шум.",
+  params: [
+    {
+      id: "amount",
+      label: "Сила",
+      type: "number",
+      default: 1,
+      hint: "0.5 = лёгкая, 1.5 = заметная",
+    },
+  ],
+  // unsharp luma_msize_x:luma_msize_y:luma_amount — размер матрицы 5×5, сила по яркости
+  toCommand: (p) => ({ vf: `unsharp=5:5:${p.amount}` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
+};
+
 // Чёрно-белое
 export const grayscale: FilterDef = {
   id: "grayscale",

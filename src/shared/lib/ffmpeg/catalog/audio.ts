@@ -23,3 +23,17 @@ export const volume: FilterDef = {
   toCommand: (p) => ({ af: `volume=${p.factor}` }),
   streams: { needsAudio: true }, // аудиофильтр — нужен аудиопоток
 };
+
+// Нормализация громкости к стандарту вещания (EBU R128, фильтр loudnorm)
+export const loudnorm: FilterDef = {
+  id: "loudnorm",
+  category: CATEGORY,
+  label: "Нормализация звука",
+  description:
+    "Выравнивает громкость к стандарту вещания EBU R128 (фильтр loudnorm). Зачем: " +
+    "привести тихие и громкие участки к единому уровню, чтобы не крутить ручку. " +
+    "Без параметров — целевой уровень по умолчанию (−24 LUFS).",
+  params: [],
+  toCommand: () => ({ af: "loudnorm" }),
+  streams: { needsAudio: true }, // аудиофильтр — нужен аудиопоток
+};

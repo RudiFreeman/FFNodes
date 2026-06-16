@@ -7,10 +7,10 @@ import { trim, crop } from "./trim";
 import { compress, extractAudio, removeAudio, changeCodec } from "./convert";
 import { rotate, flip } from "./transform";
 import { speed } from "./speed";
-import { adjust, grayscale } from "./color";
+import { adjust, sharpen, grayscale } from "./color";
 import { toGif } from "./gif";
-import { volume } from "./audio";
-import { fade, reverse } from "./effects";
+import { volume, loudnorm } from "./audio";
+import { fade, blur, vignette, reverse } from "./effects";
 
 export type { FilterDef, FilterParam, ParamType, CommandContribution } from "./types";
 
@@ -28,10 +28,14 @@ export const CATALOG: FilterDef[] = [
   flip,
   speed,
   adjust,
+  sharpen,
   grayscale,
   toGif,
   volume,
+  loudnorm,
   fade,
+  blur,
+  vignette,
   reverse,
 ];
 

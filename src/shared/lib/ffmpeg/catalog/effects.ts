@@ -29,6 +29,48 @@ export const fade: FilterDef = {
   streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
 };
 
+// Размытие кадра (гауссово, фильтр gblur)
+export const blur: FilterDef = {
+  id: "blur",
+  category: CATEGORY,
+  label: "Размытие",
+  description:
+    "Гауссово размытие кадра (фильтр gblur). Зачем: скрыть фон, смягчить картинку, " +
+    "стилизация. Радиус: 2 — лёгкое, 10 — сильное.",
+  params: [
+    {
+      id: "sigma",
+      label: "Радиус",
+      type: "number",
+      default: 5,
+      hint: "2 = лёгкое, 10 = сильное",
+    },
+  ],
+  toCommand: (p) => ({ vf: `gblur=sigma=${p.sigma}` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
+};
+
+// Виньетка — мягкое затемнение по краям кадра
+export const vignette: FilterDef = {
+  id: "vignette",
+  category: CATEGORY,
+  label: "Виньетка",
+  description:
+    "Мягко затемняет края кадра, фокусируя взгляд на центре (фильтр vignette). Зачем: " +
+    "винтажный/кинематографичный вид. Угол: меньше — сильнее затемнение по краям.",
+  params: [
+    {
+      id: "angle",
+      label: "Угол",
+      type: "number",
+      default: 0.8,
+      hint: "меньше = сильнее затемнение (норма ≈ π/5 ≈ 0.63…1)",
+    },
+  ],
+  toCommand: (p) => ({ vf: `vignette=angle=${p.angle}` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
+};
+
 // Проиграть видео задом наперёд
 export const reverse: FilterDef = {
   id: "reverse",

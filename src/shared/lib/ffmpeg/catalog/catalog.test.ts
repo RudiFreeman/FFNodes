@@ -132,3 +132,23 @@ describe("toCommand — звук, эффекты, кодек", () => {
     ]);
   });
 });
+
+describe("toCommand — резкость, размытие, виньетка, нормализация звука", () => {
+  it("sharpen → vf unsharp=5:5:<сила>", () => {
+    expect(getFilterDef("sharpen")!.toCommand({ amount: 1.5 }).vf).toBe("unsharp=5:5:1.5");
+  });
+
+  it("blur → vf gblur=sigma=<радиус>", () => {
+    expect(getFilterDef("blur")!.toCommand({ sigma: 10 }).vf).toBe("gblur=sigma=10");
+  });
+
+  it("vignette → vf vignette=angle=<угол>", () => {
+    expect(getFilterDef("vignette")!.toCommand({ angle: 0.8 }).vf).toBe("vignette=angle=0.8");
+  });
+
+  it("loudnorm → af loudnorm (звук, без vf)", () => {
+    const c = getFilterDef("loudnorm")!.toCommand({});
+    expect(c.af).toBe("loudnorm");
+    expect(c.vf).toBeUndefined();
+  });
+});
