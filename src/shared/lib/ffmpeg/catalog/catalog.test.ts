@@ -96,3 +96,39 @@ describe("toCommand — новые категории (поворот/скоро
     expect(c.outputArgs).toEqual(["-f", "gif"]);
   });
 });
+
+describe("toCommand — звук, эффекты, кодек", () => {
+  it("volume → af volume=<множитель>", () => {
+    const c = getFilterDef("volume")!.toCommand({ factor: 2 });
+    expect(c.af).toBe("volume=2");
+    expect(c.vf).toBeUndefined();
+  });
+
+  it("fade появление → vf fade=t=in", () => {
+    expect(
+      getFilterDef("fade")!.toCommand({ type: "Появление", start: 0, duration: 1 }).vf,
+    ).toBe("fade=t=in:st=0:d=1");
+  });
+
+  it("fade затемнение → vf fade=t=out", () => {
+    expect(
+      getFilterDef("fade")!.toCommand({ type: "Затемнение", start: 9, duration: 1 }).vf,
+    ).toBe("fade=t=out:st=9:d=1");
+  });
+
+  it("reverse → vf reverse", () => {
+    expect(getFilterDef("reverse")!.toCommand({}).vf).toBe("reverse");
+  });
+
+  it("codec H.265 → -c:v libx265", () => {
+    const c = getFilterDef("codec")!.toCommand({ codec: "H.265 / HEVC" });
+    expect(c.outputArgs).toEqual(["-c:v", "libx265"]);
+  });
+
+  it("codec VP9 → -c:v libvpx-vp9", () => {
+    expect(getFilterDef("codec")!.toCommand({ codec: "VP9" }).outputArgs).toEqual([
+      "-c:v",
+      "libvpx-vp9",
+    ]);
+  });
+});

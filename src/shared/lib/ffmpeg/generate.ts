@@ -52,8 +52,9 @@ export function generateCommand(graph: Graph, inputPath?: string): GeneratedComm
   const inputForArgs = inputPath ?? PLACEHOLDER_INPUT;
   const inputForDisplay = inputPath ? fileName(inputPath) : PLACEHOLDER_INPUT;
 
-  // Собрать вклад каждой ноды: vf-фрагменты в цепочку + выходные опции-флаги
+  // Собрать вклад каждой ноды: vf/af-фрагменты в цепочки + выходные опции-флаги
   const filterStrings: string[] = [];
+  const audioFilterStrings: string[] = [];
   const outputArgs: string[] = [];
   for (const node of ordered) {
     const def = node.filterId ? getFilterDef(node.filterId) : undefined;
@@ -62,18 +63,21 @@ export function generateCommand(graph: Graph, inputPath?: string): GeneratedComm
     }
     const contrib = def.toCommand(node.params);
     if (contrib.vf) filterStrings.push(contrib.vf);
+    if (contrib.af) audioFilterStrings.push(contrib.af);
     if (contrib.outputArgs) outputArgs.push(...contrib.outputArgs);
   }
 
-  // Порядок FFmpeg: вход → -vf → выходные опции → выход
+  // Порядок FFmpeg: вход → -vf → -af → выходные опции → выход
   const args: string[] = ["-i", inputForArgs];
   if (filterStrings.length > 0) args.push("-vf", filterStrings.join(","));
+  if (audioFilterStrings.length > 0) args.push("-af", audioFilterStrings.join(","));
   args.push(...outputArgs);
   args.push(PLACEHOLDER_OUTPUT);
 
-  // display — для чтения (vf-цепочка в кавычках)
+  // display — для чтения (vf/af-цепочки в кавычках)
   const parts = ["ffmpeg", "-i", inputForDisplay];
   if (filterStrings.length > 0) parts.push("-vf", `"${filterStrings.join(",")}"`);
+  if (audioFilterStrings.length > 0) parts.push("-af", `"${audioFilterStrings.join(",")}"`);
   parts.push(...outputArgs);
   parts.push(PLACEHOLDER_OUTPUT);
 

@@ -92,6 +92,23 @@ describe("generateCommand — линейная цепочка по связям"
     );
   });
 
+  it("аудиофильтр + видеофильтр: -vf и -af обе цепочки в правильном порядке", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 }),
+        node("f2", "filter", "volume", { factor: 2 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "f2"), edge("f2", "out")],
+    };
+    const r = generateCommand(graph);
+    expect(r.error).toBeUndefined();
+    expect(r.display).toBe(
+      'ffmpeg -i input.mp4 -vf "scale=1280:-2" -af "volume=2" output.mp4',
+    );
+  });
+
   it("только выходные опции (без vf): извлечь аудио", () => {
     const graph: Graph = {
       nodes: [

@@ -57,6 +57,25 @@ describe("validateGraph — несочетаемые операции", () => {
     expect(pustoy!.nodeIds).toEqual(expect.arrayContaining(["a", "b"]));
   });
 
+  it("«Убрать звук» (-an) + «Громкость» (af) → ошибка про звук", () => {
+    const g = chain(
+      node("a", "filter", "remove_audio"),
+      node("b", "filter", "volume", { factor: 2 }),
+    );
+    const { errors } = validateGraph(g);
+    const audioErr = errors.find((e) => e.message.includes("звук"));
+    expect(audioErr).toBeDefined();
+    expect(audioErr!.nodeIds).toEqual(expect.arrayContaining(["a", "b"]));
+  });
+
+  it("«Громкость» + видеофильтр → нет ошибок (звук и видео независимы)", () => {
+    const g = chain(
+      node("a", "filter", "volume", { factor: 2 }),
+      node("b", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 }),
+    );
+    expect(validateGraph(g).errors).toEqual([]);
+  });
+
   it("валидная цепочка (только видеофильтры) → нет ошибок", () => {
     const g = chain(
       node("a", "filter", "scale", { width: 1280, height: -2 }),
