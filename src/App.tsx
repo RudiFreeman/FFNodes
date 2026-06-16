@@ -35,6 +35,7 @@ function App() {
     <div className="flex h-screen flex-col overflow-hidden bg-bg text-fg">
       <TopBar
         onRender={render.render}
+        onCancel={render.cancel}
         rendering={render.status === "running"}
         canRender={canRender}
       />

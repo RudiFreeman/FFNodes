@@ -34,6 +34,9 @@
 - Валидатор `validate.ts` (циклы, висячие ноды, незаполненные параметры) — когда появится.
 - Хук `useGraph` (вставка в цепочку, перецепка связей, onParamChange) — компонентные тесты
   (нужен @testing-library). Логика вставки сейчас проверена только вживую (Playwright).
-- Tauri-команды (`run_ffmpeg`, `probe_media`, `extract_frame`) — отдельно/вручную (тонкий слой).
+- Tauri-команды (`run_ffmpeg`, `probe_media`, `extract_frame`, `cancel_render`) — отдельно/вручную
+  (тонкий слой; отмена требует живого процесса — проверяется вживую).
+- Хук `useRender` (статус `cancelled`, `cancel()` помечает отмену и зовёт `cancelRender`,
+  различение отмены и сбоя ffmpeg в catch) — компонентные тесты (нужен @testing-library + мок API).
 - Хук `usePreviewFrame` (дебаунс «После», токены актуальности против гонок, «После»=«До»
   без фильтров) — компонентные тесты (нужен @testing-library + фейк extractFrame).
