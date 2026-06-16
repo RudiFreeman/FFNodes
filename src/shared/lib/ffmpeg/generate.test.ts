@@ -22,7 +22,7 @@ describe("generateCommand — линейная цепочка по связям"
     const graph: Graph = {
       nodes: [
         node("in", "input"),
-        node("f1", "filter", "scale", { width: 1280, height: -2 }),
+        node("f1", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 }),
         node("out", "output"),
       ],
       edges: [edge("in", "f1"), edge("f1", "out")],
@@ -37,7 +37,7 @@ describe("generateCommand — линейная цепочка по связям"
     const graph: Graph = {
       nodes: [
         node("in", "input"),
-        node("f1", "filter", "scale", { width: 640, height: -2 }),
+        node("f1", "filter", "scale", { preset: "Свои размеры", width: 640, height: -2 }),
         node("f2", "filter", "fps", { value: 15 }),
         node("out", "output"),
       ],
@@ -53,7 +53,7 @@ describe("generateCommand — линейная цепочка по связям"
     const graph: Graph = {
       nodes: [
         node("out", "output"),
-        node("f_scale", "filter", "scale", { width: 320, height: -2 }),
+        node("f_scale", "filter", "scale", { preset: "Свои размеры", width: 320, height: -2 }),
         node("f_fps", "filter", "fps", { value: 10 }),
         node("in", "input"),
       ],
@@ -78,7 +78,7 @@ describe("generateCommand — линейная цепочка по связям"
     const graph: Graph = {
       nodes: [
         node("in", "input"),
-        node("f1", "filter", "scale", { width: 1280, height: -2 }),
+        node("f1", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 }),
         node("f2", "filter", "compress", { crf: 23 }),
         node("out", "output"),
       ],
@@ -126,7 +126,7 @@ describe("generateCommand — линейная цепочка по связям"
 describe("generateCommand — неполный граф → ошибка, не падение", () => {
   it("нет output", () => {
     const graph: Graph = {
-      nodes: [node("in", "input"), node("f1", "filter", "scale", { width: 1, height: 1 })],
+      nodes: [node("in", "input"), node("f1", "filter", "scale", { preset: "Свои размеры", width: 1, height: 1 })],
       edges: [edge("in", "f1")],
     };
     expect(generateCommand(graph).error).toBeTruthy();
@@ -136,7 +136,7 @@ describe("generateCommand — неполный граф → ошибка, не �
     const graph: Graph = {
       nodes: [
         node("in", "input"),
-        node("f1", "filter", "scale", { width: 1, height: 1 }),
+        node("f1", "filter", "scale", { preset: "Свои размеры", width: 1, height: 1 }),
         node("out", "output"),
       ],
       edges: [edge("in", "f1")], // f1 → out нет
@@ -148,7 +148,7 @@ describe("generateCommand — неполный граф → ошибка, не �
     const graph: Graph = {
       nodes: [
         node("in", "input"),
-        node("f1", "filter", "scale", { width: 1, height: 1 }),
+        node("f1", "filter", "scale", { preset: "Свои размеры", width: 1, height: 1 }),
         node("f2", "filter", "fps", { value: 1 }),
         node("out", "output"),
       ],
