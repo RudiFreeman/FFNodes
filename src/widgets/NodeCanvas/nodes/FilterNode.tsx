@@ -1,7 +1,8 @@
 // Кастомная нода React Flow для фильтра. Цвет по типу — см. docs/UI.md §2 (фиолетовый).
 // Показывает имя фильтра и редактируемые параметры; изменения уходят в состояние графа
 // через колбэк onParamChange (кладётся в data при создании ноды в useGraph).
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
+import { X } from "lucide-react";
 import type { ParamValue } from "../../../shared/types/graph";
 import { getFilterDef } from "../../../shared/lib/ffmpeg/catalog";
 
@@ -16,10 +17,23 @@ export interface FilterNodeData {
 export function FilterNode({ id, data }: NodeProps) {
   const d = data as FilterNodeData;
   const def = getFilterDef(d.filterId);
+  // deleteElements запускает штатный путь удаления → срабатывает onNodesDelete в
+  // useGraph (авто-перецепка цепочки). Кнопка × — то же удаление, что и клавишей Delete.
+  const { deleteElements } = useReactFlow();
 
   return (
-    <div className="min-w-[180px] rounded-md border-2 border-node-filter bg-surface px-3 py-2 shadow-md">
+    <div className="group relative min-w-[180px] rounded-md border-2 border-node-filter bg-surface px-3 py-2 shadow-md">
       <Handle type="target" position={Position.Left} className="!bg-node-filter" />
+      {/* Кнопка удаления ноды (× в углу). nodrag — чтобы клик не таскал ноду. */}
+      <button
+        type="button"
+        aria-label="Удалить фильтр"
+        title="Удалить фильтр"
+        className="nodrag absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-surface text-fg-muted opacity-0 transition hover:text-destructive focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-ring group-hover:opacity-100"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        <X className="h-3 w-3" aria-hidden />
+      </button>
       <div className="text-xs font-medium uppercase tracking-wide text-node-filter">
         Фильтр
       </div>
