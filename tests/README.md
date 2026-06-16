@@ -17,8 +17,9 @@
 | Предсказание `predictOutput`: scale/fps/trim/speed/rotate/gif/аудио, цепочка, без applyToInfo, иммутабельность | `src/shared/lib/ffmpeg/predict.test.ts` | 14 |
 | Vf-цепочка для кадра `videoFilterChain`: порядок фрагментов, только-кодек→пусто, без фильтров→пусто, разрыв→null, неизвестный фильтр→null | `src/shared/lib/ffmpeg/frame.test.ts` | 5 |
 | Перецепка при удалении `bridgesOnDelete`+`applyBridges`: средняя нода, длинная цепочка, два подряд, два несмежных, нет входящей/исходящей, мост по полному снимку, самопетля, без дублей, иммутабельность | `src/features/add-node/relink.test.ts` | 12 |
+| Пресеты «Изменить размер» `scale`: toCommand (короткая сторона/половина/свои/дефолт), applyToInfo на гориз/вертик (не раздувает), свои с авто-высотой, без размеров входа | `src/shared/lib/ffmpeg/catalog/resize.test.ts` | 11 |
 
-**Фронт (Vitest): 64 ✅**
+**Фронт (Vitest): 75 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 

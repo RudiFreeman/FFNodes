@@ -15,6 +15,9 @@ export interface FilterParam {
   default?: ParamValue;
   options?: string[]; // для enum
   hint?: string; // helper-текст под полем
+  // Условная видимость: параметр показывается, только если другой параметр (`param`)
+  // равен `equals`. Напр. поля «Ширина/Высота» видны лишь при пресете «Свои размеры».
+  showIf?: { param: string; equals: ParamValue };
 }
 
 // Вклад операции в итоговую команду. Гибкий: операция может дать кусок -vf фильтра

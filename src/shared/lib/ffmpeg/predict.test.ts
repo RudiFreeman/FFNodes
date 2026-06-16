@@ -71,7 +71,7 @@ describe("predictOutput", () => {
   });
 
   it("scale: меняет разрешение, высота -2 считается по пропорциям входа", () => {
-    const r = predictOutput(chain(node("f", "filter", "scale", { width: 1280, height: -2 })), input);
+    const r = predictOutput(chain(node("f", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 })), input);
     // 1280 при соотношении 16:9 → высота 720
     expect(r?.width).toBe(1280);
     expect(r?.height).toBe(720);
@@ -116,7 +116,7 @@ describe("predictOutput", () => {
   it("цепочка scale → fps → trim считается по порядку", () => {
     const r = predictOutput(
       chain(
-        node("a", "filter", "scale", { width: 1280, height: -2 }),
+        node("a", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 }),
         node("b", "filter", "fps", { value: 24 }),
         node("c", "filter", "trim", { start: 0, end: 10 }),
       ),
@@ -146,7 +146,7 @@ describe("predictOutput", () => {
 
   it("не мутирует входной объект", () => {
     const snapshot = { ...input };
-    predictOutput(chain(node("f", "filter", "scale", { width: 640, height: 360 })), input);
+    predictOutput(chain(node("f", "filter", "scale", { preset: "Свои размеры", width: 640, height: 360 })), input);
     expect(input).toEqual(snapshot);
   });
 });

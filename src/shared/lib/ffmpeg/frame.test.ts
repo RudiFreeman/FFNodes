@@ -21,7 +21,7 @@ describe("videoFilterChain", () => {
     const graph: Graph = {
       nodes: [
         node("in", "input"),
-        node("a", "filter", "scale", { width: 640, height: -2 }),
+        node("a", "filter", "scale", { preset: "Свои размеры", width: 640, height: -2 }),
         node("b", "filter", "fps", { value: 15 }),
         node("out", "output"),
       ],
@@ -53,7 +53,7 @@ describe("videoFilterChain", () => {
 
   it("оборванная цепочка → null", () => {
     const graph: Graph = {
-      nodes: [node("in", "input"), node("a", "filter", "scale", { width: 640, height: -2 }), node("out", "output")],
+      nodes: [node("in", "input"), node("a", "filter", "scale", { preset: "Свои размеры", width: 640, height: -2 }), node("out", "output")],
       edges: [edge("in", "a")], // a → out нет
     };
     expect(videoFilterChain(graph)).toBeNull();

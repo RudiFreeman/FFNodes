@@ -34,7 +34,7 @@ describe("catalog index", () => {
 
 describe("toCommand — vf-фильтры (граф значений → vf-строка)", () => {
   const cases: { id: string; params: Record<string, string | number>; vf: string }[] = [
-    { id: "scale", params: { width: 1280, height: -2 }, vf: "scale=1280:-2" },
+    { id: "scale", params: { preset: "Свои размеры", width: 1280, height: -2 }, vf: "scale=1280:-2" },
     { id: "fps", params: { value: 15 }, vf: "fps=15" },
     { id: "trim", params: { start: 0, end: 10 }, vf: "trim=start=0:end=10" },
     { id: "crop", params: { w: 640, h: 640 }, vf: "crop=640:640" },
