@@ -17,3 +17,15 @@
     margin: 0;
   }
 }
+
+/* Контролы React Flow (zoom/fit/lock) под тёмную тему (N-001). По умолчанию они светлые —
+   белый артефакт в углу холста. Переопределяем CSS-переменные xyflow под палитру UI.md.
+   Значения совпадают с токенами Tailwind: surface #1B2336, surface-2 #272F42,
+   border #475569, fg #F8FAFC. */
+.react-flow__controls {
+  --xy-controls-button-background-color: #1b2336;
+  --xy-controls-button-background-color-hover: #272f42;
+  --xy-controls-button-color: #f8fafc;
+  --xy-controls-button-color-hover: #f8fafc;
+  --xy-controls-button-border-color: #475569;
+}
