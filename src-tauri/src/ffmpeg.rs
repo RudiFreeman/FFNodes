@@ -215,7 +215,57 @@ pub fn extract_frame(input_path: String, vf: Option<String>, at_sec: f64) -> Res
         return Err("ffmpeg не смог извлечь кадр".to_string());
     }
 
+    // Подчистить накопленные кадры, оставив окно последних N (До + После + запас на
+    // дебаунс-гонки «После»). N-011: имена уникальны (наносекунды) и не перетираются,
+    // поэтому без чистки растут бесконечно.
+    cleanup_old_frames(FRAME_KEEP);
+
     Ok(out_path)
+}
+
+// Сколько последних кадров оставляем в temp в рамках сессии (До + После + запас).
+const FRAME_KEEP: usize = 4;
+// Префикс/суффикс имён наших превью-кадров (по ним опознаём свои файлы в temp).
+const FRAME_PREFIX: &str = "ffmpeg-visual-frame-";
+const FRAME_SUFFIX: &str = ".jpg";
+
+// Из списка путей кадров выбрать те, что нужно удалить: всё, кроме `keep` последних.
+// Имена кадров содержат наносекундный штамп, поэтому лексикографическая сортировка =
+// хронологическая. Чистая функция (без файловой системы) — тестируемо.
+fn frames_to_cleanup(existing: &[String], keep: usize) -> Vec<String> {
+    if existing.len() <= keep {
+        return Vec::new();
+    }
+    let mut sorted = existing.to_vec();
+    sorted.sort();
+    let cut = sorted.len() - keep;
+    sorted.into_iter().take(cut).collect()
+}
+
+// Просканировать temp-папку по маске наших кадров и удалить старые, оставив `keep`
+// последних. Ошибки чтения/удаления игнорируем — чистка не должна ронять превью.
+// pub — вызывается при старте приложения (lib.rs setup) с keep=0 для очистки от
+// прошлых сессий.
+pub fn cleanup_old_frames(keep: usize) {
+    let dir = std::env::temp_dir();
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let frames: Vec<String> = entries
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with(FRAME_PREFIX) && name.ends_with(FRAME_SUFFIX) {
+                Some(e.path().to_string_lossy().to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+    // Сортировку и выбор «что удалить» делает frames_to_cleanup (read_dir порядок не гарантирует)
+    for path in frames_to_cleanup(&frames, keep) {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 // Из строки прогресса FFmpeg (`-progress`) достать обработанное время в секундах.
@@ -379,6 +429,58 @@ mod tests {
         // Пустая строка vf не должна добавлять флаг -vf
         let args = build_frame_args("/tmp/in.mov", Some(""), 0.0, "/tmp/out.jpg");
         assert!(!args.iter().any(|a| a == "-vf"));
+    }
+
+    #[test]
+    fn frames_to_cleanup_keeps_last_n() {
+        // 5 кадров (имена по штампу, не по порядку в массиве), keep=2 → удалить 3 старейших
+        let frames = vec![
+            "/tmp/ffmpeg-visual-frame-300.jpg".to_string(),
+            "/tmp/ffmpeg-visual-frame-100.jpg".to_string(),
+            "/tmp/ffmpeg-visual-frame-500.jpg".to_string(),
+            "/tmp/ffmpeg-visual-frame-200.jpg".to_string(),
+            "/tmp/ffmpeg-visual-frame-400.jpg".to_string(),
+        ];
+        let mut to_del = frames_to_cleanup(&frames, 2);
+        to_del.sort();
+        assert_eq!(
+            to_del,
+            vec![
+                "/tmp/ffmpeg-visual-frame-100.jpg".to_string(),
+                "/tmp/ffmpeg-visual-frame-200.jpg".to_string(),
+                "/tmp/ffmpeg-visual-frame-300.jpg".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn frames_to_cleanup_nothing_when_within_keep() {
+        // Кадров не больше keep — удалять нечего
+        let frames = vec![
+            "/tmp/ffmpeg-visual-frame-1.jpg".to_string(),
+            "/tmp/ffmpeg-visual-frame-2.jpg".to_string(),
+        ];
+        assert!(frames_to_cleanup(&frames, 4).is_empty());
+        assert!(frames_to_cleanup(&frames, 2).is_empty());
+    }
+
+    #[test]
+    fn frames_to_cleanup_keep_zero_removes_all() {
+        // keep=0 (старт приложения) — удаляем все найденные кадры
+        let frames = vec![
+            "/tmp/ffmpeg-visual-frame-1.jpg".to_string(),
+            "/tmp/ffmpeg-visual-frame-2.jpg".to_string(),
+        ];
+        let mut to_del = frames_to_cleanup(&frames, 0);
+        to_del.sort();
+        assert_eq!(to_del, frames);
+    }
+
+    #[test]
+    fn frames_to_cleanup_empty_input() {
+        let frames: Vec<String> = Vec::new();
+        assert!(frames_to_cleanup(&frames, 0).is_empty());
+        assert!(frames_to_cleanup(&frames, 4).is_empty());
     }
 
     #[test]
