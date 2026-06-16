@@ -47,6 +47,11 @@ export async function runFfmpeg(args: string[], duration: number | null): Promis
   return invoke("run_ffmpeg", { args, durationSec: duration });
 }
 
+// Отменить текущий рендер. Rust убивает процесс ffmpeg и удаляет недописанный файл.
+export async function cancelRender(): Promise<void> {
+  return invoke("cancel_render");
+}
+
 // Извлечь кадр для превью. vf — цепочка фильтров (null/"" → кадр исходника), atSec — момент.
 // Rust-команда extract_frame пишет JPG во временную папку и возвращает путь к нему.
 // convertFileSrc превращает путь в URL asset-протокола (asset.localhost), пригодный для <img>.

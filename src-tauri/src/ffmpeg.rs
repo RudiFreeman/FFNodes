@@ -2,8 +2,23 @@
 // 🔒 Безопасность: бинарник запускаем напрямую (Command), НЕ через shell — нет инъекций
 //    даже если в пути файла спецсимволы. Аргументы передаём массивом.
 use std::io::{BufRead, BufReader};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::Emitter;
+
+// Состояние текущего рендера — разделяемое между командами через tauri State.
+// Нужно, чтобы `cancel_render` мог убить процесс, запущенный в `run_ffmpeg`
+// (иначе Child живёт локально в run_ffmpeg и снаружи недоступен).
+#[derive(Default)]
+pub struct RenderState {
+    // Текущий запущенный ffmpeg (None — рендер не идёт). За Mutex, т.к. трогают
+    // два потока: run_ffmpeg (кладёт/забирает) и cancel_render (убивает).
+    child: Mutex<Option<Child>>,
+    // Флаг «рендер отменён пользователем» — чтобы run_ffmpeg отличил отмену
+    // (тихо завершить + удалить битый файл) от настоящего сбоя ffmpeg.
+    cancelled: AtomicBool,
+}
 
 // Метаданные медиафайла (отдаём во фронт). Поля опциональны — не все файлы их имеют.
 // Отбираем только осмысленные поля ffprobe (служебные codec_tag/disposition/time_base — мусор, не берём).
@@ -235,9 +250,14 @@ fn parse_progress_seconds(line: &str) -> Option<f64> {
 #[tauri::command]
 pub async fn run_ffmpeg(
     app: tauri::AppHandle,
+    state: tauri::State<'_, RenderState>,
     args: Vec<String>,
     duration_sec: Option<f64>,
 ) -> Result<(), String> {
+    // Выходной путь — последний аргумент (плейсхолдер заменён фронтом на реальный путь).
+    // Запоминаем заранее, чтобы удалить недописанный файл при отмене.
+    let out_path = args.last().cloned();
+
     // Добавляем машинный прогресс в stdout и подавляем обычную статистику
     let mut full_args: Vec<String> = vec!["-y".into(), "-progress".into(), "pipe:1".into(), "-nostats".into()];
     full_args.extend(args);
@@ -249,8 +269,16 @@ pub async fn run_ffmpeg(
         .spawn()
         .map_err(|e| format!("Не удалось запустить ffmpeg: {e}. Установлен ли FFmpeg?"))?;
 
-    // Читаем прогресс построчно из stdout
-    if let Some(stdout) = child.stdout.take() {
+    // stdout забираем ДО того, как отдать Child в стейт — чтение прогресса не должно
+    // держать лок (иначе cancel_render не получит доступ к Child и зависнет).
+    let stdout = child.stdout.take();
+
+    // Новый рендер сбрасывает флаг отмены и кладёт процесс в общий стейт.
+    state.cancelled.store(false, Ordering::SeqCst);
+    *state.child.lock().unwrap() = Some(child);
+
+    // Читаем прогресс построчно из stdout (без удержания лока стейта)
+    if let Some(stdout) = stdout {
         let reader = BufReader::new(stdout);
         for line in reader.lines().map_while(Result::ok) {
             if let Some(done_sec) = parse_progress_seconds(&line) {
@@ -263,9 +291,26 @@ pub async fn run_ffmpeg(
         }
     }
 
-    let status = child
-        .wait()
-        .map_err(|e| format!("Ошибка ожидания ffmpeg: {e}"))?;
+    // Забираем Child обратно из стейта, чтобы дождаться завершения. Если cancel_render
+    // уже забрал и убил его — здесь будет None, рендер считаем отменённым.
+    let child = state.child.lock().unwrap().take();
+    let cancelled = state.cancelled.load(Ordering::SeqCst);
+
+    // Отмена: процесс убит из cancel_render. Тихо завершаем и чистим битый файл.
+    if cancelled {
+        if let Some(path) = &out_path {
+            let _ = std::fs::remove_file(path); // файла может не быть — игнорируем
+        }
+        return Err("Рендер отменён".to_string());
+    }
+
+    let status = match child {
+        Some(mut c) => c
+            .wait()
+            .map_err(|e| format!("Ошибка ожидания ffmpeg: {e}"))?,
+        // Child исчез без флага отмены — неожиданная ситуация, считаем сбоем
+        None => return Err("ffmpeg завершился неожиданно".to_string()),
+    };
 
     if status.success() {
         let _ = app.emit("render-progress", 100.0_f64);
@@ -274,6 +319,20 @@ pub async fn run_ffmpeg(
     } else {
         Err("ffmpeg завершился с ошибкой при рендере".to_string())
     }
+}
+
+// Отменить текущий рендер: убить процесс ffmpeg и пометить отмену.
+// Битый выходной файл удалит run_ffmpeg, увидев флаг cancelled.
+// 🔒 Только kill уже запущенного нами процесса — внешних данных не принимает.
+#[tauri::command]
+pub fn cancel_render(state: tauri::State<'_, RenderState>) -> Result<(), String> {
+    // Флаг ставим до kill: run_ffmpeg, проснувшись после kill, должен увидеть отмену.
+    state.cancelled.store(true, Ordering::SeqCst);
+    if let Some(mut child) = state.child.lock().unwrap().take() {
+        let _ = child.kill(); // процесс мог уже завершиться — игнорируем ошибку
+        let _ = child.wait(); // дождаться, чтобы не оставить зомби-процесс
+    }
+    Ok(())
 }
 
 #[cfg(test)]
