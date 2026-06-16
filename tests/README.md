@@ -16,8 +16,9 @@
 | Обход цепочки `orderedFilters`: порядок по связям, пустая цепочка, нет output, разрыв, цикл | `src/shared/lib/ffmpeg/chain.test.ts` | 5 |
 | Предсказание `predictOutput`: scale/fps/trim/speed/rotate/gif/аудио, цепочка, без applyToInfo, иммутабельность | `src/shared/lib/ffmpeg/predict.test.ts` | 14 |
 | Vf-цепочка для кадра `videoFilterChain`: порядок фрагментов, только-кодек→пусто, без фильтров→пусто, разрыв→null, неизвестный фильтр→null | `src/shared/lib/ffmpeg/frame.test.ts` | 5 |
+| Валидация `validateGraph` (N-007): -vn+видеофильтр, -vn+compress, -vn+-an (пустой файл), валидная цепочка, только -an, только -vn, разрыв→молчит, пустая цепочка | `src/shared/lib/ffmpeg/validate.test.ts` | 8 |
 
-**Фронт (Vitest): 52 ✅**
+**Фронт (Vitest): 60 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
@@ -31,7 +32,8 @@
 
 ## 🔴 Нужно покрыть (по мере появления кода)
 
-- Валидатор `validate.ts` (циклы, висячие ноды, незаполненные параметры) — когда появится.
+- Валидатор `validate.ts` — несочетаемые операции покрыты (см. выше). Осталось на будущее:
+  циклы, висячие ноды, незаполненные обязательные параметры — когда появятся правила.
 - Хук `useGraph` (вставка в цепочку, перецепка связей, onParamChange) — компонентные тесты
   (нужен @testing-library). Логика вставки сейчас проверена только вживую (Playwright).
 - Tauri-команды (`run_ffmpeg`, `probe_media`, `extract_frame`) — отдельно/вручную (тонкий слой).

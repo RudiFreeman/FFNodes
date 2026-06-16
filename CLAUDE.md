@@ -83,7 +83,11 @@ src-tauri/                # Rust: run_ffmpeg, probe_media, file pickers
   кадр в webview через asset-протокол (узкий scope `ffmpeg-visual-frame-*.jpg`) + `convertFileSrc`.
   Чистая `frame.ts` (`videoFilterChain`) собирает vf из графа; хук `usePreviewFrame` —
   «До» при выборе файла, «После» с дебаунсом при правке графа, токены против гонок.
-  Переключатель «До/После» под кадром. Тесты: фронт 52 ✅, Rust 9 ✅.
+  Переключатель «До/После» под кадром. Тесты: фронт 60 ✅, Rust 9 ✅.
+- **Валидация несочетаемых операций (N-007):** чистая `validate.ts` (`validateGraph`) по
+  декларативным тегам `FilterDef.streams` (dropsVideo/dropsAudio/needsVideo) ловит бессмыслицу
+  (-vn + видеофильтр; -vn + -an). Блокирует рендер (`generate.ts` → error + invalidNodeIds);
+  конфликтные ноды краснеют (рамка + значок ⚠ + tooltip), сообщение в CommandBar.
 - **Запуск:** `npm install`, затем `npm run tauri dev` (десктоп) или `npm run dev` (фронт).
   Тесты — `npm test` (фронт) и `cargo test` в `src-tauri/` (Rust). Билд — `npm run build`.
 - **Открытый техдолг (CODE_NOTES):** N-005 — нет отмены рендера; N-001 — стиль контролов

@@ -21,6 +21,7 @@ export const toGif: FilterDef = {
     vf: `fps=${p.fps},scale=${p.width}:-1:flags=lanczos`,
     outputArgs: ["-f", "gif"],
   }),
+  streams: { needsVideo: true }, // видеофильтр (fps,scale) — нужен видеопоток
   // GIF: формат gif, без звука, своя ширина (высота авто по пропорциям), свой fps
   applyToInfo: (info, p) => {
     const width = Number(p.width);

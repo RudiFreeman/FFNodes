@@ -19,6 +19,7 @@ export const adjust: FilterDef = {
   toCommand: (p) => ({
     vf: `eq=brightness=${p.brightness}:contrast=${p.contrast}:saturation=${p.saturation}`,
   }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
 };
 
 // Чёрно-белое
@@ -31,4 +32,5 @@ export const grayscale: FilterDef = {
     "акцент на форме и свете вместо цвета.",
   params: [],
   toCommand: () => ({ vf: "hue=s=0" }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
 };

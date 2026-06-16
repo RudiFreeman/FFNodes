@@ -16,6 +16,7 @@ export const trim: FilterDef = {
     { id: "end", label: "Конец (сек)", type: "number", default: 10 },
   ],
   toCommand: (p) => ({ vf: `trim=start=${p.start}:end=${p.end}` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
   // Длительность = конец − начало (не меньше нуля)
   applyToInfo: (info, p) => ({
     ...info,
@@ -36,6 +37,7 @@ export const crop: FilterDef = {
     { id: "h", label: "Высота области", type: "number", default: 640 },
   ],
   toCommand: (p) => ({ vf: `crop=${p.w}:${p.h}` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
   // Разрешение становится размером вырезанной области
   applyToInfo: (info, p) => ({ ...info, width: Number(p.w), height: Number(p.h) }),
 };

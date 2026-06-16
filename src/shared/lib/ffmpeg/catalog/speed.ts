@@ -23,6 +23,7 @@ export const speed: FilterDef = {
   ],
   // PTS делится на множитель: factor=2 → setpts=PTS/2 (быстрее)
   toCommand: (p) => ({ vf: `setpts=PTS/${p.factor}` }),
+  streams: { needsVideo: true }, // видеофильтр (setpts) — нужен видеопоток
   // Длительность делится на множитель (×2 → вдвое короче). FPS не меняется.
   applyToInfo: (info, p) => {
     const factor = Number(p.factor);

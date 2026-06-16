@@ -22,6 +22,7 @@ export const compress: FilterDef = {
     },
   ],
   toCommand: (p) => ({ outputArgs: ["-c:v", "libx264", "-crf", String(p.crf)] }),
+  streams: { needsVideo: true }, // -c:v перекодирует видео — нужен видеопоток
   // Перекодирование в H.264. Размер файла честно не предсказываем (зависит от CRF и контента).
   applyToInfo: (info) => ({ ...info, video_codec: "h264" }),
 };
@@ -36,6 +37,7 @@ export const extractAudio: FilterDef = {
     "Видео отбрасывается (-vn), аудио копируется без перекодирования.",
   params: [],
   toCommand: () => ({ outputArgs: ["-vn", "-c:a", "copy"] }),
+  streams: { dropsVideo: true }, // -vn: убирает видео
   // Видеодорожка отбрасывается — все видеохарактеристики становятся «нет»
   applyToInfo: (info) => ({
     ...info,
@@ -63,6 +65,7 @@ export const removeAudio: FilterDef = {
     "сделать немой клип. Видео копируется без перекодирования (-an).",
   params: [],
   toCommand: () => ({ outputArgs: ["-an"] }),
+  streams: { dropsAudio: true }, // -an: убирает звук
   // Звуковая дорожка удаляется — все аудиохарактеристики «нет»
   applyToInfo: (info) => ({
     ...info,

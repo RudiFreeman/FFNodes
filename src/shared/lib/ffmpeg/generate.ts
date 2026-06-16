@@ -3,11 +3,13 @@
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
 import { orderedFilters } from "./chain";
+import { validateGraph } from "./validate";
 
 export interface GeneratedCommand {
   args: string[]; // аргументы для запуска (НЕ склеенная строка — защита от инъекций)
   display: string; // человекочитаемая команда для показа внизу
-  error?: string; // если граф неполон — что именно не так (команду не строим)
+  error?: string; // если граф неполон/несочетаем — что именно не так (команду не строим)
+  invalidNodeIds?: string[]; // ноды-виновники ошибки валидации (для подсветки на холсте)
 }
 
 const PLACEHOLDER_INPUT = "input.mp4";
@@ -31,6 +33,18 @@ export function generateCommand(graph: Graph, inputPath?: string): GeneratedComm
       args: [],
       display: "",
       error: "Соедини ноды: вход → фильтры → выход",
+    };
+  }
+
+  // Цепочка цела — проверяем осмысленность комбинации операций (N-007).
+  // Несочетаемые операции блокируют рендер с понятным объяснением.
+  const { errors } = validateGraph(graph);
+  if (errors.length > 0) {
+    return {
+      args: [],
+      display: "",
+      error: errors[0].message,
+      invalidNodeIds: errors.flatMap((e) => e.nodeIds),
     };
   }
 

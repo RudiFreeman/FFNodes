@@ -22,6 +22,7 @@ export const scale: FilterDef = {
     },
   ],
   toCommand: (p) => ({ vf: `scale=${p.width}:${p.height}` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
   // Разрешение. -1/-2 = авто по пропорциям: считаем от текущих размеров входа.
   applyToInfo: (info, p) => {
     const w = Number(p.width);
@@ -55,5 +56,6 @@ export const fps: FilterDef = {
     { id: "value", label: "Кадров в секунду", type: "number", default: 30 },
   ],
   toCommand: (p) => ({ vf: `fps=${p.value}` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
   applyToInfo: (info, p) => ({ ...info, fps: Number(p.value) }),
 };
