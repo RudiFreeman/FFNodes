@@ -13,6 +13,7 @@ import { useInputFile } from "./features/input-file/useInputFile";
 import { useRender } from "./features/run-render/useRender";
 import { useFavorites } from "./features/favorites/useFavorites";
 import { usePreviewFrame } from "./features/preview-frame/usePreviewFrame";
+import { ErrorBoundary } from "./app/ErrorBoundary";
 import "./App.css";
 
 function App() {
@@ -76,8 +77,10 @@ function App() {
 // ReactFlowProvider нужен, чтобы хуки состояния React Flow работали в App (вне <ReactFlow>)
 export default function AppWithProvider() {
   return (
-    <ReactFlowProvider>
-      <App />
-    </ReactFlowProvider>
+    <ErrorBoundary>
+      <ReactFlowProvider>
+        <App />
+      </ReactFlowProvider>
+    </ErrorBoundary>
   );
 }
