@@ -132,15 +132,27 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
 
   // Синхронизировать характеристики в data стартовых нод (вход — info, выход — предсказание),
   // чтобы InputNode/OutputNode их отрисовали. По аналогии с onParamChange (пишем в data).
+  // ВАЖНО — защита от зацикливания: setNodes → новый `nodes` → новый useMemo `graph` →
+  //   `predictOutput` отдаёт НОВЫЙ объект с тем же содержимым → эффект снова → setNodes…
+  //   («Maximum update depth exceeded»). Поэтому сравниваем по СОДЕРЖИМОМУ (а не по ссылке):
+  //   если info и предсказание не изменились фактически — возвращаем prev и цикл рвётся.
   useEffect(() => {
-    setNodes((prev) =>
-      prev.map((n) => {
-        if (n.type === "input-file") return { ...n, data: { ...n.data, info: info ?? null } };
-        if (n.type === "output-file")
-          return { ...n, data: { ...n.data, info: predictedOutput } };
+    setNodes((prev) => {
+      const input = prev.find((n) => n.type === "input-file");
+      const output = prev.find((n) => n.type === "output-file");
+      const nextInfo = info ?? null;
+      const sameContent = (a: unknown, b: unknown) =>
+        a === b || JSON.stringify(a) === JSON.stringify(b);
+      const inputSame = sameContent((input?.data as { info?: unknown })?.info, nextInfo);
+      const outputSame = sameContent((output?.data as { info?: unknown })?.info, predictedOutput);
+      // Фактически ничего не изменилось — не создаём новый массив нод (разрывает цикл)
+      if (inputSame && outputSame) return prev;
+      return prev.map((n) => {
+        if (n.type === "input-file") return { ...n, data: { ...n.data, info: nextInfo } };
+        if (n.type === "output-file") return { ...n, data: { ...n.data, info: predictedOutput } };
         return n;
-      }),
-    );
+      });
+    });
   }, [info, predictedOutput, setNodes]);
 
   return {
