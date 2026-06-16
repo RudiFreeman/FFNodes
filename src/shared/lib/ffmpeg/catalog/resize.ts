@@ -61,6 +61,7 @@ export const scale: FilterDef = {
     },
   ],
   toCommand: (p) => ({ vf: scaleFilter(p) }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
   applyToInfo: (info, p) => applyScale(info, p),
 };
 
@@ -142,5 +143,6 @@ export const fps: FilterDef = {
     { id: "value", label: "Кадров в секунду", type: "number", default: 30 },
   ],
   toCommand: (p) => ({ vf: `fps=${p.value}` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
   applyToInfo: (info, p) => ({ ...info, fps: Number(p.value) }),
 };

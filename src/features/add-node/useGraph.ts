@@ -140,6 +140,32 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     [graph, inputPath],
   );
 
+  // Набор id нод-виновников ошибки валидации (N-007) — для подсветки на холсте
+  const invalidIds = useMemo(
+    () => new Set(command.invalidNodeIds ?? []),
+    [command.invalidNodeIds],
+  );
+
+  // Прокинуть флаг invalid + причину в data конфликтных нод, чтобы FilterNode подсветил их
+  // красным и показал tooltip. Защита от зацикливания (как в эффекте ниже, см. N-013):
+  // меняем массив нод только если флаг/причина фактически изменились.
+  const invalidReason = command.error ?? "";
+  useEffect(() => {
+    setNodes((prev) => {
+      let changed = false;
+      const next = prev.map((n) => {
+        if (n.type !== "filter") return n;
+        const want = invalidIds.has(n.id);
+        const d = n.data as { invalid?: boolean; invalidReason?: string };
+        const reason = want ? invalidReason : "";
+        if ((d.invalid === true) === want && (d.invalidReason ?? "") === reason) return n;
+        changed = true;
+        return { ...n, data: { ...n.data, invalid: want, invalidReason: reason } };
+      });
+      return changed ? next : prev;
+    });
+  }, [invalidIds, invalidReason, setNodes]);
+
   // Предсказанные характеристики результата — пересчитываются на лету из графа и входа
   const predictedOutput = useMemo(
     () => predictOutput(graph, info ?? null),

@@ -29,6 +29,7 @@ export const rotate: FilterDef = {
     };
     return { vf: map[String(p.angle)] ?? "transpose=1" };
   },
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
   // Поворот на 90°/270° меняет ширину и высоту местами; 180° — без изменений
   applyToInfo: (info, p) => {
     if (p.angle === "180°") return { ...info };
@@ -56,4 +57,5 @@ export const flip: FilterDef = {
   toCommand: (p) => ({
     vf: p.dir === "Вертикально" ? "vflip" : "hflip",
   }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
 };

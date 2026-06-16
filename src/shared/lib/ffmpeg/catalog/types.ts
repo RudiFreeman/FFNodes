@@ -27,6 +27,14 @@ export interface CommandContribution {
   outputArgs?: string[]; // флаги выходных опций, напр. ['-c:v', 'libx264', '-crf', '23']
 }
 
+// Как операция влияет на потоки — декларативно, для валидации несочетаемых комбинаций
+// (см. validate.ts, N-007). Без хардкода id фильтров в валидаторе.
+export interface StreamEffect {
+  dropsVideo?: boolean; // убирает видеодорожку (-vn, напр. «Извлечь аудио»)
+  dropsAudio?: boolean; // убирает аудиодорожку (-an, напр. «Убрать звук»)
+  needsVideo?: boolean; // работает по видео (видеофильтр -vf) — бессмыслен без видеопотока
+}
+
 // Определение одной операции/фильтра
 export interface FilterDef {
   id: string; // 'scale'
@@ -40,4 +48,7 @@ export interface FilterDef {
   // Возвращает НОВЫЙ MediaInfo (иммутабельно). Необязательно: операция без этого поля
   // характеристики не меняет (напр. поворот на 180°, цветокоррекция, отражение).
   applyToInfo?: (info: MediaInfo, p: Record<string, ParamValue>) => MediaInfo;
+  // Влияние на потоки — для валидации несочетаемых операций (N-007). Необязательно:
+  // операция без этого поля считается нейтральной к потокам.
+  streams?: StreamEffect;
 }
