@@ -83,13 +83,18 @@ src-tauri/                # Rust: run_ffmpeg, probe_media, file pickers
   кадр в webview через asset-протокол (узкий scope `ffmpeg-visual-frame-*.jpg`) + `convertFileSrc`.
   Чистая `frame.ts` (`videoFilterChain`) собирает vf из графа; хук `usePreviewFrame` —
   «До» при выборе файла, «После» с дебаунсом при правке графа, токены против гонок.
-  Переключатель «До/После» под кадром. Тесты: фронт 83 ✅, Rust 13 ✅.
+  Переключатель «До/После» под кадром. Тесты: фронт 92 ✅, Rust 13 ✅.
   Накопление кадров в temp решено (N-011): `cleanup_old_frames` (чистая `frames_to_cleanup`)
   оставляет окно последних N — в конце `extract_frame` (keep=4) и при старте (`setup`, keep=0).
+- **Каталог: 19 операций.** Категории: Размер/FPS, Обрезка, Поворот/Отражение, Скорость,
+  Цвет/Яркость, Конвертация/Сжатие (вкл. «Сменить кодек» H.264/H.265/VP9), Экспорт GIF,
+  Звук (`audio.ts` — «Громкость»), Эффекты (`effects.ts` — «Затухание», «Реверс»).
+  Модель `CommandContribution`: `vf` (видеофильтр) + `af` (аудиофильтр) + `outputArgs`;
+  генератор собирает `-vf`/`-af`/опции. Добавить операцию = файл в `catalog/` + строка в `index.ts`.
 - **Валидация несочетаемых операций (N-007):** чистая `validate.ts` (`validateGraph`) по
-  декларативным тегам `FilterDef.streams` (dropsVideo/dropsAudio/needsVideo) ловит бессмыслицу
-  (-vn + видеофильтр; -vn + -an). Блокирует рендер (`generate.ts` → error + invalidNodeIds);
-  конфликтные ноды краснеют (рамка + значок ⚠ + tooltip), сообщение в CommandBar.
+  декларативным тегам `FilterDef.streams` (dropsVideo/dropsAudio/needsVideo/needsAudio) ловит
+  бессмыслицу (-vn + видеофильтр; -an + аудиофильтр; -vn + -an). Блокирует рендер
+  (`generate.ts` → error + invalidNodeIds); конфликтные ноды краснеют (рамка + значок ⚠ + tooltip).
 - **Запуск:** `npm install`, затем `npm run tauri dev` (десктоп) или `npm run dev` (фронт).
   Тесты — `npm test` (фронт) и `cargo test` в `src-tauri/` (Rust). Билд — `npm run build`.
 - **Отмена рендера:** во время рендера кнопка «Рендер» становится красной «Отмена»

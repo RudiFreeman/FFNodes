@@ -24,6 +24,7 @@ export interface FilterParam {
 // (склеивается в цепочку с другими через запятую) И/ИЛИ выходные опции-флаги (-c:v, -crf, -an…).
 export interface CommandContribution {
   vf?: string; // фрагмент видеофильтра, напр. 'scale=1280:-2'
+  af?: string; // фрагмент аудиофильтра, напр. 'volume=2.0' (склеивается в -af цепочку)
   outputArgs?: string[]; // флаги выходных опций, напр. ['-c:v', 'libx264', '-crf', '23']
 }
 
@@ -33,6 +34,7 @@ export interface StreamEffect {
   dropsVideo?: boolean; // убирает видеодорожку (-vn, напр. «Извлечь аудио»)
   dropsAudio?: boolean; // убирает аудиодорожку (-an, напр. «Убрать звук»)
   needsVideo?: boolean; // работает по видео (видеофильтр -vf) — бессмыслен без видеопотока
+  needsAudio?: boolean; // работает по звуку (аудиофильтр -af) — бессмыслен без аудиопотока
 }
 
 // Определение одной операции/фильтра

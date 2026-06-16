@@ -27,6 +27,44 @@ export const compress: FilterDef = {
   applyToInfo: (info) => ({ ...info, video_codec: "h264" }),
 };
 
+// Сменить видеокодек. Энкодер и итоговый кодек по выбору пользователя.
+const CODEC_ENCODER: Record<string, string> = {
+  "H.264": "libx264",
+  "H.265 / HEVC": "libx265",
+  "VP9": "libvpx-vp9",
+};
+const CODEC_NAME: Record<string, string> = {
+  "H.264": "h264",
+  "H.265 / HEVC": "hevc",
+  "VP9": "vp9",
+};
+
+export const changeCodec: FilterDef = {
+  id: "codec",
+  category: CATEGORY,
+  label: "Сменить кодек",
+  description:
+    "Перекодирует видео в выбранный кодек. Зачем: H.265/VP9 дают меньший файл при том же " +
+    "качестве (но медленнее и хуже совместимость), H.264 — самый совместимый.",
+  params: [
+    {
+      id: "codec",
+      label: "Кодек",
+      type: "enum",
+      default: "H.264",
+      options: ["H.264", "H.265 / HEVC", "VP9"],
+    },
+  ],
+  toCommand: (p) => ({
+    outputArgs: ["-c:v", CODEC_ENCODER[String(p.codec)] ?? "libx264"],
+  }),
+  streams: { needsVideo: true }, // -c:v перекодирует видео — нужен видеопоток
+  applyToInfo: (info, p) => ({
+    ...info,
+    video_codec: CODEC_NAME[String(p.codec)] ?? "h264",
+  }),
+};
+
 // Извлечь аудио — выкинуть видеодорожку, оставить звук
 export const extractAudio: FilterDef = {
   id: "extract_audio",

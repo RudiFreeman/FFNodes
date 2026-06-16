@@ -29,6 +29,7 @@ export function validateGraph(graph: Graph): ValidationResult {
   const dropsVideo: { id: string; label: string }[] = [];
   const dropsAudio: { id: string; label: string }[] = [];
   const needsVideo: { id: string; label: string }[] = [];
+  const needsAudio: { id: string; label: string }[] = [];
 
   for (const node of ordered) {
     const def = node.filterId ? getFilterDef(node.filterId) : undefined;
@@ -38,6 +39,7 @@ export function validateGraph(graph: Graph): ValidationResult {
     if (s.dropsVideo) dropsVideo.push(entry);
     if (s.dropsAudio) dropsAudio.push(entry);
     if (s.needsVideo) needsVideo.push(entry);
+    if (s.needsAudio) needsAudio.push(entry);
   }
 
   // 1) Видео убрано (-vn), но в цепочке есть операция по видео — она работать не будет
@@ -55,6 +57,16 @@ export function validateGraph(graph: Graph): ValidationResult {
     errors.push({
       message: `«${dropsVideo[0].label}» убирает видео, «${dropsAudio[0].label}» — звук. Вместе они дадут пустой файл. Оставь хотя бы одну дорожку.`,
       nodeIds: [...dropsVideo.map((n) => n.id), ...dropsAudio.map((n) => n.id)],
+    });
+  }
+
+  // 3) Звук убран (-an), но в цепочке есть операция по звуку — она работать не будет
+  if (dropsAudio.length > 0 && needsAudio.length > 0) {
+    const dropLabel = dropsAudio[0].label;
+    const needLabels = needsAudio.map((n) => `«${n.label}»`).join(", ");
+    errors.push({
+      message: `«${dropLabel}» убирает звуковую дорожку — операции по звуку (${needLabels}) работать не будут. Убери одно из двух.`,
+      nodeIds: [...dropsAudio.map((n) => n.id), ...needsAudio.map((n) => n.id)],
     });
   }
 
