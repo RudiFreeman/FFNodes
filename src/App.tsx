@@ -61,6 +61,7 @@ function App() {
           onNodesChange={graph.onNodesChange}
           onEdgesChange={graph.onEdgesChange}
           onConnect={graph.onConnect}
+          onNodesDelete={graph.onNodesDelete}
         />
         <FilterCatalog
           onAddFilter={graph.addFilterNode}

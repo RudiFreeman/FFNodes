@@ -15,6 +15,7 @@ import type { Graph, GraphNode, ParamValue } from "../../shared/types/graph";
 import type { MediaInfo } from "../../shared/types/media";
 import { generateCommand } from "../../shared/lib/ffmpeg/generate";
 import { predictOutput } from "../../shared/lib/ffmpeg/predict";
+import { bridgesOnDelete, applyBridges } from "./relink";
 import type { FilterNodeData } from "../../widgets/NodeCanvas/nodes/FilterNode";
 
 // Фиксированные id стартовых нод (input/output всегда на холсте в MVP)
@@ -98,6 +99,21 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     [setEdges],
   );
 
+  // Удаление нод (клавишей Delete или кнопкой × на ноде) — авто-перецепка цепочки:
+  // предшественника удаляемой ноды соединяем с её преемником, чтобы не разорвать
+  // цепочку (N-003). ВАЖНО: React Flow внутри deleteElements СНАЧАЛА удаляет связанные
+  // рёбра (через onEdgesChange), и лишь ПОТОМ зовёт onNodesDelete — поэтому мосты
+  // считаем по `edges` из замыкания (полный снимок ДО удаления), а вливаем в `prev`
+  // (где рёбра удалённых нод уже вырезаны). applyBridges не добавит дубль-связь.
+  const onNodesDelete = useCallback(
+    (deleted: Node[]) => {
+      const ids = deleted.map((n) => n.id);
+      const bridges = bridgesOnDelete(edges, ids);
+      setEdges((prev) => applyBridges(prev, bridges));
+    },
+    [edges, setEdges],
+  );
+
   // Маппинг состояния React Flow → доменный Graph (чистая логика не знает про UI)
   const graph: Graph = useMemo(() => {
     const domainNodes: GraphNode[] = nodes.map((n) => {
@@ -162,6 +178,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     onNodesChange,
     onEdgesChange,
     onConnect,
+    onNodesDelete,
     addFilterNode,
     command,
     predictedOutput,

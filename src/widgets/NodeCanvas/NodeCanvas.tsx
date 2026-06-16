@@ -12,6 +12,7 @@ import {
   type OnNodesChange,
   type OnEdgesChange,
   type OnConnect,
+  type OnNodesDelete,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { FilterNode } from "./nodes/FilterNode";
@@ -24,6 +25,7 @@ interface NodeCanvasProps {
   onNodesChange: OnNodesChange<Node>;
   onEdgesChange: OnEdgesChange<Edge>;
   onConnect: OnConnect;
+  onNodesDelete: OnNodesDelete<Node>;
 }
 
 export function NodeCanvas({
@@ -32,6 +34,7 @@ export function NodeCanvas({
   onNodesChange,
   onEdgesChange,
   onConnect,
+  onNodesDelete,
 }: NodeCanvasProps) {
   // Регистрация кастомных типов нод (мемо — чтобы не пересоздавать каждый рендер)
   const nodeTypes = useMemo(
@@ -48,6 +51,7 @@ export function NodeCanvas({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodesDelete={onNodesDelete}
         fitView
         // Меньший стартовый масштаб: ноды не разворачиваются на весь холст (maxZoom < 1).
         // minZoom чуть ниже дефолта — можно отдалиться сильнее.
