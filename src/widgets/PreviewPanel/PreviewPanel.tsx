@@ -3,6 +3,8 @@
 import { Fragment } from "react";
 import { FileVideo, FolderOpen } from "lucide-react";
 import type { MediaInfo } from "../../shared/api/tauri";
+import { FramePreview } from "./FramePreview";
+import type { PreviewFrameState } from "../../features/preview-frame/usePreviewFrame";
 import {
   formatBytes,
   formatDuration,
@@ -21,6 +23,7 @@ interface PreviewPanelProps {
   error: string | null;
   outputInfo: MediaInfo | null; // характеристики «После»: предсказание или результат рендера
   rendered: boolean; // true — outputInfo это реальный результат рендера (размер точный, не «≈»)
+  frame: PreviewFrameState; // кадры «До»/«После» (usePreviewFrame)
   onChoose: () => void;
 }
 
@@ -88,8 +91,11 @@ export function PreviewPanel({
   error,
   outputInfo,
   rendered,
+  frame,
   onChoose,
 }: PreviewPanelProps) {
+  // «После» отличается от «До» только когда кадр после реально получен и не равен «До»
+  const hasAfter = frame.after !== null && frame.after !== frame.before;
   return (
     <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-surface">
       <div className="border-b border-border px-3 py-2 text-xs font-medium uppercase tracking-wide text-fg-muted">
@@ -112,10 +118,15 @@ export function PreviewPanel({
         </div>
       ) : (
         <div className="flex flex-1 flex-col overflow-y-auto">
-          {/* Заглушка плеера (реальное видео-превью — позже) */}
-          <div className="flex aspect-video items-center justify-center border-b border-border bg-bg">
-            <FileVideo className="h-8 w-8 text-fg-muted" aria-hidden />
-          </div>
+          {/* Превью-кадр До/После (видеоплеер с проигрыванием — отдельный этап позже) */}
+          <FramePreview
+            before={frame.before}
+            after={frame.after}
+            loadingBefore={frame.loadingBefore}
+            loadingAfter={frame.loadingAfter}
+            error={frame.error}
+            hasAfter={hasAfter}
+          />
 
           {/* Имя файла + кнопка сменить */}
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">

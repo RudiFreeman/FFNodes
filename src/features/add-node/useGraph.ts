@@ -146,6 +146,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
   return {
     nodes,
     edges,
+    graph, // доменный Graph — для превью-кадра (usePreviewFrame) и др. чистой логики
     onNodesChange,
     onEdgesChange,
     onConnect,

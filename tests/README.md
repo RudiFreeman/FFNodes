@@ -15,8 +15,9 @@
 | Генератор: цепочки по связям, порядок, разрыв, цикл, пустой граф, outputArgs, комбинация, путь | `src/shared/lib/ffmpeg/generate.test.ts` | 11 |
 | Обход цепочки `orderedFilters`: порядок по связям, пустая цепочка, нет output, разрыв, цикл | `src/shared/lib/ffmpeg/chain.test.ts` | 5 |
 | Предсказание `predictOutput`: scale/fps/trim/speed/rotate/gif/аудио, цепочка, без applyToInfo, иммутабельность | `src/shared/lib/ffmpeg/predict.test.ts` | 14 |
+| Vf-цепочка для кадра `videoFilterChain`: порядок фрагментов, только-кодек→пусто, без фильтров→пусто, разрыв→null, неизвестный фильтр→null | `src/shared/lib/ffmpeg/frame.test.ts` | 5 |
 
-**Фронт (Vitest): 47 ✅**
+**Фронт (Vitest): 52 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
@@ -24,12 +25,15 @@
 |---|---|---|
 | Разбор ответа ffprobe: дроби FPS, полный набор полей (битрейт/профиль/aspect/pix_fmt/цвет/кадры/аудио-детали/энкодер/дата), fallback битрейта на контейнер, нет аудио, мусор | `src-tauri/src/ffmpeg.rs` (`#[cfg(test)]`) | 5 |
 | Парс прогресса рендера (`out_time_us` → секунды) | там же | 1 |
+| Сборка аргументов кадра `build_frame_args`: с фильтрами, без vf, пустой vf не даёт флаг | там же | 3 |
 
-**Rust: 6 ✅**
+**Rust: 9 ✅**
 
 ## 🔴 Нужно покрыть (по мере появления кода)
 
 - Валидатор `validate.ts` (циклы, висячие ноды, незаполненные параметры) — когда появится.
 - Хук `useGraph` (вставка в цепочку, перецепка связей, onParamChange) — компонентные тесты
   (нужен @testing-library). Логика вставки сейчас проверена только вживую (Playwright).
-- Tauri-команды (`run_ffmpeg`, `probe_media`) — отдельно/вручную (тонкий слой).
+- Tauri-команды (`run_ffmpeg`, `probe_media`, `extract_frame`) — отдельно/вручную (тонкий слой).
+- Хук `usePreviewFrame` (дебаунс «После», токены актуальности против гонок, «После»=«До»
+  без фильтров) — компонентные тесты (нужен @testing-library + фейк extractFrame).
