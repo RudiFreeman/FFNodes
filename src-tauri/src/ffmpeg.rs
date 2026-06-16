@@ -54,6 +54,18 @@ pub struct MediaInfo {
     pub encoder: Option<String>,        // энкодер (из tags, напр. «DaVinci Resolve»)
 }
 
+// Обезопасить путь от трактовки как флаг ffmpeg/ffprobe (N-004). Путь, начинающийся
+// с «-», эти утилиты приняли бы за опцию (argument injection). Префиксуем «./» —
+// получается относительный путь («-foo.mp4» → «./-foo.mp4»), который читается как файл.
+// Абсолютные и обычные пути не трогаем. Кроссплатформенно: ffmpeg принимает «/» и на Windows.
+fn safe_path(path: &str) -> String {
+    if path.starts_with('-') {
+        format!("./{path}")
+    } else {
+        path.to_string()
+    }
+}
+
 // Распарсить дробь FFmpeg вида "30/1" или "30000/1001" в число
 fn parse_fraction(s: &str) -> Option<f64> {
     let (num, den) = s.split_once('/')?;
@@ -78,7 +90,7 @@ pub fn probe_media(path: String) -> Result<MediaInfo, String> {
             "json",
             "-show_format",
             "-show_streams",
-            &path,
+            &safe_path(&path), // N-004: путь с «-» не должен стать флагом
         ])
         .output()
         .map_err(|e| format!("Не удалось запустить ffprobe: {e}. Установлен ли FFmpeg?"))?;
@@ -219,7 +231,8 @@ pub fn extract_frame(input_path: String, vf: Option<String>, at_sec: f64) -> Res
     out.push(format!("ffmpeg-visual-frame-{stamp}.jpg"));
     let out_path = out.to_string_lossy().to_string();
 
-    let args = build_frame_args(&input_path, vf.as_deref(), at_sec, &out_path);
+    // N-004: путь с «-» не должен стать флагом ffmpeg
+    let args = build_frame_args(&safe_path(&input_path), vf.as_deref(), at_sec, &out_path);
 
     let output = Command::new("ffmpeg")
         .args(&args)
@@ -388,6 +401,19 @@ pub fn cancel_render(state: tauri::State<'_, RenderState>) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safe_path_prefixes_leading_dash() {
+        // Путь с «-» получает префикс ./ (не станет флагом ffmpeg)
+        assert_eq!(safe_path("-evil.mp4"), "./-evil.mp4");
+        assert_eq!(safe_path("--output"), "./--output");
+        // Абсолютные и обычные пути не трогаем
+        assert_eq!(safe_path("/Users/a/clip.mov"), "/Users/a/clip.mov");
+        assert_eq!(safe_path("C:\\video\\clip.mp4"), "C:\\video\\clip.mp4");
+        assert_eq!(safe_path("clip.mp4"), "clip.mp4");
+        assert_eq!(safe_path("./clip.mp4"), "./clip.mp4");
+        assert_eq!(safe_path(""), "");
+    }
 
     #[test]
     fn parse_fraction_works() {
