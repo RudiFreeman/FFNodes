@@ -154,9 +154,9 @@ describe("toCommand — резкость, размытие, виньетка, н
 });
 
 describe("toCommand — отступы, поворот на угол, затухание звука, моно", () => {
-  it("pad → vf pad с центрированием", () => {
+  it("pad → vf scale(вписать)+pad с центрированием", () => {
     expect(getFilterDef("pad")!.toCommand({ width: 1080, height: 1080 }).vf).toBe(
-      "pad=1080:1080:(ow-iw)/2:(oh-ih)/2",
+      "scale=1080:1080:force_original_aspect_ratio=decrease,pad=1080:1080:(ow-iw)/2:(oh-ih)/2",
     );
   });
 
