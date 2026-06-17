@@ -2,14 +2,14 @@
 // Из него питается и UI каталога (справа), и будущий генератор команды.
 // См. docs/ARCHITECTURE.md §3. Добавить фильтр = импортировать его сюда в CATALOG.
 import type { FilterDef } from "./types";
-import { scale, fps } from "./resize";
+import { scale, pad, fps } from "./resize";
 import { trim, crop } from "./trim";
 import { compress, extractAudio, removeAudio, changeCodec } from "./convert";
-import { rotate, flip } from "./transform";
+import { rotate, rotateAngle, flip } from "./transform";
 import { speed } from "./speed";
 import { adjust, sharpen, grayscale } from "./color";
 import { toGif } from "./gif";
-import { volume, loudnorm } from "./audio";
+import { volume, audioFade, mono, loudnorm } from "./audio";
 import { fade, blur, vignette, reverse } from "./effects";
 
 export type { FilterDef, FilterParam, ParamType, CommandContribution } from "./types";
@@ -17,6 +17,7 @@ export type { FilterDef, FilterParam, ParamType, CommandContribution } from "./t
 // Все доступные операции каталога
 export const CATALOG: FilterDef[] = [
   scale,
+  pad,
   fps,
   trim,
   crop,
@@ -25,6 +26,7 @@ export const CATALOG: FilterDef[] = [
   extractAudio,
   removeAudio,
   rotate,
+  rotateAngle,
   flip,
   speed,
   adjust,
@@ -32,6 +34,8 @@ export const CATALOG: FilterDef[] = [
   grayscale,
   toGif,
   volume,
+  audioFade,
+  mono,
   loudnorm,
   fade,
   blur,

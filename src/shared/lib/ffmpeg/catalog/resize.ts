@@ -131,6 +131,27 @@ function applyScale(info: MediaInfo, p: Record<string, ParamValue>): MediaInfo {
   return { ...info, width: outW, height: outH };
 }
 
+// Добавить чёрные поля до целевого размера (леттербокс/паддинг, фильтр pad).
+// Исходный кадр центрируется, вокруг — чёрные поля. НЕ масштабирует (для этого «Изменить
+// размер»); если цель меньше исходника — pad ничего не обрежет, поэтому цель должна быть ≥ входа.
+export const pad: FilterDef = {
+  id: "pad",
+  category: CATEGORY,
+  label: "Отступы / леттербокс",
+  description:
+    "Добавляет чёрные поля вокруг кадра до целевого размера (фильтр pad), кадр по центру. " +
+    "Зачем: вписать видео в нужный формат без растяжения (например горизонтальное в " +
+    "квадрат 1080×1080 для соцсети). Целевой размер должен быть не меньше исходного.",
+  params: [
+    { id: "width", label: "Ширина", type: "number", default: 1080, hint: "в пикселях, ≥ ширины входа" },
+    { id: "height", label: "Высота", type: "number", default: 1080, hint: "в пикселях, ≥ высоты входа" },
+  ],
+  // Кадр центрируется: смещение = (целевая − исходная)/2 по каждой оси
+  toCommand: (p) => ({ vf: `pad=${p.width}:${p.height}:(ow-iw)/2:(oh-ih)/2` }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
+  applyToInfo: (info, p) => ({ ...info, width: Number(p.width), height: Number(p.height) }),
+};
+
 // Сменить частоту кадров
 export const fps: FilterDef = {
   id: "fps",

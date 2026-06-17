@@ -11,7 +11,7 @@
 | Что | Где | Тестов |
 |---|---|---|
 | Каталог: индекс, уникальность id, поиск, группировка | `src/shared/lib/ffmpeg/catalog/catalog.test.ts` | 5 |
-| `toCommand`: vf-фильтры + outputArgs (compress/аудио) + поворот/скорость/цвет/GIF + звук/эффекты/кодек (volume `af`, fade in/out, reverse, codec H.265/VP9) + резкость/размытие/виньетка/нормализация звука (unsharp, gblur, vignette, loudnorm `af`) | там же (table-driven) | 22 |
+| `toCommand`: vf-фильтры + outputArgs (compress/аудио) + поворот/скорость/цвет/GIF + звук/эффекты/кодек (volume `af`, fade in/out, reverse, codec H.265/VP9) + резкость/размытие/виньетка/нормализация звука (unsharp, gblur, vignette, loudnorm `af`) + отступы/поворот-угол/затухание-звука/моно (pad +applyToInfo, rotate=°*PI/180, afade in/out, -ac 1 +applyToInfo) | там же (table-driven) | 28 |
 | Генератор: цепочки по связям, порядок, разрыв, цикл, пустой граф, outputArgs, комбинация, путь, -af + -vf вместе | `src/shared/lib/ffmpeg/generate.test.ts` | 12 |
 | Обход цепочки `orderedFilters`: порядок по связям, пустая цепочка, нет output, разрыв, цикл | `src/shared/lib/ffmpeg/chain.test.ts` | 5 |
 | Предсказание `predictOutput`: scale/fps/trim/speed/rotate/gif/аудио, цепочка, без applyToInfo, иммутабельность | `src/shared/lib/ffmpeg/predict.test.ts` | 14 |
@@ -21,7 +21,7 @@
 | Валидация `validateGraph` (N-007): -vn+видеофильтр, -vn+compress, -vn+-an (пустой файл), -an+громкость (needsAudio), громкость+видеофильтр (ок), валидная цепочка, только -an, только -vn, разрыв→молчит, пустая цепочка | `src/shared/lib/ffmpeg/validate.test.ts` | 10 |
 | Защита пути `safePath` (N-004): ведущий `-` → префикс ./; абсолютные/обычные/пустой не трогаем | `src/shared/lib/ffmpeg/safePath.test.ts` | 2 |
 
-**Фронт (Vitest): 98 ✅**
+**Фронт (Vitest): 104 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 

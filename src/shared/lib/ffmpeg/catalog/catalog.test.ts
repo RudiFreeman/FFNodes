@@ -152,3 +152,43 @@ describe("toCommand — резкость, размытие, виньетка, н
     expect(c.vf).toBeUndefined();
   });
 });
+
+describe("toCommand — отступы, поворот на угол, затухание звука, моно", () => {
+  it("pad → vf pad с центрированием", () => {
+    expect(getFilterDef("pad")!.toCommand({ width: 1080, height: 1080 }).vf).toBe(
+      "pad=1080:1080:(ow-iw)/2:(oh-ih)/2",
+    );
+  });
+
+  it("pad: applyToInfo выставляет целевой размер", () => {
+    const info = { width: 1920, height: 1080 } as never;
+    const out = getFilterDef("pad")!.applyToInfo!(info, { width: 1080, height: 1080 });
+    expect(out.width).toBe(1080);
+    expect(out.height).toBe(1080);
+  });
+
+  it("rotate_angle → vf rotate=<градусы>*PI/180", () => {
+    expect(getFilterDef("rotate_angle")!.toCommand({ degrees: 5 }).vf).toBe("rotate=5*PI/180");
+  });
+
+  it("audio_fade нарастание → af afade=t=in", () => {
+    expect(
+      getFilterDef("audio_fade")!.toCommand({ type: "Нарастание", start: 0, duration: 1 }).af,
+    ).toBe("afade=t=in:st=0:d=1");
+  });
+
+  it("audio_fade угасание → af afade=t=out", () => {
+    expect(
+      getFilterDef("audio_fade")!.toCommand({ type: "Угасание", start: 9, duration: 1 }).af,
+    ).toBe("afade=t=out:st=9:d=1");
+  });
+
+  it("mono → outputArgs -ac 1, applyToInfo каналы=1", () => {
+    const c = getFilterDef("mono")!.toCommand({});
+    expect(c.outputArgs).toEqual(["-ac", "1"]);
+    const info = { audio_channels: 2, channel_layout: "stereo" } as never;
+    const out = getFilterDef("mono")!.applyToInfo!(info, {});
+    expect(out.audio_channels).toBe(1);
+    expect(out.channel_layout).toBe("mono");
+  });
+});
