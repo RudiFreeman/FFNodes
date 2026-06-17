@@ -144,6 +144,61 @@ describe("predictOutput", () => {
     expect(r?.height).toBe(270); // 480 при 16:9
   });
 
+  it("overlay: размер результата = размер основного входа (не накладки)", () => {
+    // in1 (основной, 1920×1080) →[in-0] ov; in2 (накладка, 320×240) →[in-1] ov; ov → out
+    const small: MediaInfo = { ...input, width: 320, height: 240 };
+    const graph: Graph = {
+      nodes: [
+        node("in1", "input"),
+        node("in2", "input"),
+        node("ov", "filter", "overlay", { x: 0, y: 0 }),
+        node("out", "output"),
+      ],
+      edges: [
+        { id: "1", source: "in1", target: "ov", targetHandle: "in-0" },
+        { id: "2", source: "in2", target: "ov", targetHandle: "in-1" },
+        { id: "3", source: "ov", target: "out" },
+      ],
+    };
+    const infos = new Map<string, MediaInfo | null>([
+      ["in1", input],
+      ["in2", small],
+    ]);
+    const r = predictOutput(graph, input, infos);
+    expect(r?.width).toBe(1920);
+    expect(r?.height).toBe(1080);
+  });
+
+  it("concat: длительность результата = сумма двух роликов", () => {
+    const second: MediaInfo = { ...input, duration: 20 };
+    const graph: Graph = {
+      nodes: [
+        node("in1", "input"),
+        node("in2", "input"),
+        node("cc", "filter", "concat", {}),
+        node("out", "output"),
+      ],
+      edges: [
+        { id: "1", source: "in1", target: "cc", targetHandle: "in-0" },
+        { id: "2", source: "in2", target: "cc", targetHandle: "in-1" },
+        { id: "3", source: "cc", target: "out" },
+      ],
+    };
+    const infos = new Map<string, MediaInfo | null>([
+      ["in1", input], // 60с
+      ["in2", second], // 20с
+    ]);
+    const r = predictOutput(graph, input, infos);
+    expect(r?.duration).toBe(80); // 60 + 20
+  });
+
+  it("GIF (merge videoInputs:1) предсказывается как раньше через applyToInfo", () => {
+    const r = predictOutput(chain(node("g", "filter", "to_gif", { fps: 12, width: 480 })), input);
+    expect(r?.format).toBe("gif");
+    expect(r?.fps).toBe(12);
+    expect(r?.width).toBe(480);
+  });
+
   it("не мутирует входной объект", () => {
     const snapshot = { ...input };
     predictOutput(chain(node("f", "filter", "scale", { preset: "Свои размеры", width: 640, height: 360 })), input);

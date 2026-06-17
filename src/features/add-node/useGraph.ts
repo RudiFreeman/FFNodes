@@ -241,10 +241,21 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     });
   }, [invalidIds, invalidReason, setNodes]);
 
-  // Предсказанные характеристики результата — пересчитываются на лету из графа и входа
+  // Характеристики по input-нодам (для предсказания при слиянии): основной вход — из пропа
+  // info, дополнительные — из их data.info (ffprobe в chooseInputFile).
+  const inputInfos = useMemo(() => {
+    const map = new Map<string, MediaInfo | null>();
+    for (const n of nodes) {
+      if (n.type !== "input-file") continue;
+      map.set(n.id, n.id === INPUT_ID ? info ?? null : (n.data as Partial<InputNodeData>).info ?? null);
+    }
+    return map;
+  }, [nodes, info]);
+
+  // Предсказанные характеристики результата — пересчитываются на лету из графа и входов
   const predictedOutput = useMemo(
-    () => predictOutput(graph, info ?? null),
-    [graph, info],
+    () => predictOutput(graph, info ?? null, inputInfos),
+    [graph, info, inputInfos],
   );
 
   // Синхронизировать характеристики в data стартовых нод (вход — info, выход — предсказание),
