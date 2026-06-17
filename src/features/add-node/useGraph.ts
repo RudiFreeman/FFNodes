@@ -16,7 +16,9 @@ import type { MediaInfo } from "../../shared/types/media";
 import { generateCommand } from "../../shared/lib/ffmpeg/generate";
 import { predictOutput } from "../../shared/lib/ffmpeg/predict";
 import { bridgesOnDelete, applyBridges } from "./relink";
+import { pickInputFile, probeMedia } from "../../shared/api/tauri";
 import type { FilterNodeData } from "../../widgets/NodeCanvas/nodes/FilterNode";
+import type { InputNodeData } from "../../widgets/NodeCanvas/nodes/InputNode";
 
 // Фиксированные id стартовых нод (input/output всегда на холсте в MVP)
 const INPUT_ID = "input";
@@ -93,6 +95,47 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     [setNodes, setEdges, onParamChange],
   );
 
+  // Выбрать файл для ДОПОЛНИТЕЛЬНОГО входа (multi-input): диалог → ffprobe → пишем в data ноды.
+  // Основной вход (id "input") выбирается из топбара (useInputFile), сюда не попадает.
+  const chooseInputFile = useCallback(
+    async (nodeId: string) => {
+      const path = await pickInputFile();
+      if (!path) return; // отмена выбора
+      let info: MediaInfo | null = null;
+      try {
+        info = await probeMedia(path);
+      } catch {
+        info = null; // метаданные не прочитались — путь всё равно сохраняем
+      }
+      setNodes((prev) =>
+        prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, path, info } } : n)),
+      );
+    },
+    [setNodes],
+  );
+
+  // Добавить дополнительный вход (для overlay/concat). Файл выбирается на самой ноде.
+  const addInputNode = useCallback(() => {
+    const newId = crypto.randomUUID();
+    setNodes((prev) => {
+      const inputCount = prev.filter((n) => n.type === "input-file").length;
+      const data: InputNodeData = {
+        info: null,
+        path: null,
+        onChoose: chooseInputFile,
+        nodeId: newId,
+      };
+      const node: Node = {
+        id: newId,
+        type: "input-file",
+        position: { x: 80, y: 360 + (inputCount - 1) * 140 },
+        data,
+        deletable: true, // дополнительные входы можно удалять (в отличие от основного)
+      };
+      return [...prev, node];
+    });
+  }, [setNodes, chooseInputFile]);
+
   // Соединение нод пользователем вручную
   const onConnect = useCallback(
     (conn: Connection) => setEdges((prev) => addEdge(conn, prev)),
@@ -114,11 +157,23 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     [edges, setEdges],
   );
 
-  // Маппинг состояния React Flow → доменный Graph (чистая логика не знает про UI)
+  // Маппинг состояния React Flow → доменный Graph (чистая логика не знает про UI).
+  // Для input-нод кладём path в params.path: основной вход (id INPUT_ID) — из пропа inputPath,
+  // дополнительные — из своих data.path. Так generateComplexCommand знает путь каждого входа.
   const graph: Graph = useMemo(() => {
     const domainNodes: GraphNode[] = nodes.map((n) => {
-      const kind =
-        n.type === "input-file" ? "input" : n.type === "output-file" ? "output" : "filter";
+      if (n.type === "input-file") {
+        const d = n.data as Partial<InputNodeData>;
+        const path = n.id === INPUT_ID ? inputPath ?? undefined : d.path ?? undefined;
+        const params: Record<string, ParamValue> = path ? { path } : {};
+        return {
+          id: n.id,
+          kind: "input" as const,
+          params,
+          position: n.position,
+        };
+      }
+      const kind = n.type === "output-file" ? ("output" as const) : ("filter" as const);
       const d = n.data as Partial<FilterNodeData>;
       return {
         id: n.id,
@@ -130,9 +185,14 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     });
     return {
       nodes: domainNodes,
-      edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+      edges: edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        targetHandle: e.targetHandle ?? undefined,
+      })),
     };
-  }, [nodes, edges]);
+  }, [nodes, edges, inputPath]);
 
   // Сгенерированная команда — обновляется при изменении графа или выбранного файла
   const command = useMemo(
@@ -180,7 +240,9 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
   //   если info и предсказание не изменились фактически — возвращаем prev и цикл рвётся.
   useEffect(() => {
     setNodes((prev) => {
-      const input = prev.find((n) => n.type === "input-file");
+      // Только ОСНОВНОЙ вход (INPUT_ID) синхронизируем с info из топбара — у дополнительных
+      // входов свой info (из их собственного ffprobe в chooseInputFile), его не трогаем.
+      const input = prev.find((n) => n.id === INPUT_ID);
       const output = prev.find((n) => n.type === "output-file");
       const nextInfo = info ?? null;
       const sameContent = (a: unknown, b: unknown) =>
@@ -190,7 +252,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
       // Фактически ничего не изменилось — не создаём новый массив нод (разрывает цикл)
       if (inputSame && outputSame) return prev;
       return prev.map((n) => {
-        if (n.type === "input-file") return { ...n, data: { ...n.data, info: nextInfo } };
+        if (n.id === INPUT_ID) return { ...n, data: { ...n.data, info: nextInfo } };
         if (n.type === "output-file") return { ...n, data: { ...n.data, info: predictedOutput } };
         return n;
       });
@@ -206,6 +268,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     onConnect,
     onNodesDelete,
     addFilterNode,
+    addInputNode,
     command,
     predictedOutput,
   };

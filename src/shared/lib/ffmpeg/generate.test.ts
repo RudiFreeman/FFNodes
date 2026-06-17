@@ -168,6 +168,21 @@ describe("generateCommand — filter_complex путь (DAG)", () => {
     );
   });
 
+  it("путь входа берётся из params.path ноды (multi-input модель)", () => {
+    // У input-ноды путь задан прямо в params (как для дополнительных входов в Фазе 3)
+    const graph: Graph = {
+      nodes: [
+        node("in", "input", undefined, { path: "/videos/from-params.mp4" }),
+        node("f1", "filter", "to_gif", { fps: 12, width: 480 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    // inputPath не передаём — путь должен прийти из params.path
+    const r = generateCommand(graph);
+    expect(r.args).toContain("/videos/from-params.mp4");
+  });
+
   it("GIF-палитра: реальный путь в args, короткое имя в display", () => {
     const graph: Graph = {
       nodes: [
