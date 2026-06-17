@@ -96,6 +96,93 @@ describe("buildComplexPlan — обычные фильтры через filter_c
   });
 });
 
+describe("buildComplexPlan — merge-операции (overlay/concat)", () => {
+  it("overlay: два входа → [0:v][1:v]overlay[v1], мапит v1, аудио основного входа", () => {
+    // in1 (основной) → overlay[in-main]; in2 (накладка) → overlay[in-overlay]; overlay → out
+    const graph: Graph = {
+      nodes: [
+        node("in1", "input"),
+        node("in2", "input"),
+        node("ov", "filter", "overlay", { x: 10, y: 20 }),
+        node("out", "output"),
+      ],
+      edges: [
+        edge("in1", "ov", "in-main"),
+        edge("in2", "ov", "in-overlay"),
+        edge("ov", "out"),
+      ],
+    };
+    const r = buildComplexPlan(
+      graph,
+      new Map([
+        ["in1", "main.mp4"],
+        ["in2", "logo.png"],
+      ]),
+    );
+    if (isComplexError(r)) throw new Error(r.error);
+    expect(r.inputs).toEqual(["main.mp4", "logo.png"]);
+    expect(r.filterComplex).toBe("[0:v][1:v]overlay=10:20[v1]");
+    expect(r.mapVideo).toBe("v1");
+  });
+
+  it("concat: два входа → concat=n=2 с видео+аудио выходами", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in1", "input"),
+        node("in2", "input"),
+        node("cc", "filter", "concat", {}),
+        node("out", "output"),
+      ],
+      edges: [
+        edge("in1", "cc", "in-a"),
+        edge("in2", "cc", "in-b"),
+        edge("cc", "out"),
+      ],
+    };
+    const r = buildComplexPlan(
+      graph,
+      new Map([
+        ["in1", "first.mp4"],
+        ["in2", "second.mp4"],
+      ]),
+    );
+    if (isComplexError(r)) throw new Error(r.error);
+    expect(r.filterComplex).toBe("[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[v1][a1]");
+    expect(r.mapVideo).toBe("v1");
+    expect(r.mapAudio).toBe("a1");
+  });
+
+  it("overlay с фильтром на основном входе до слияния: scale потом overlay", () => {
+    // in1 → scale → overlay[main]; in2 → overlay[overlay]; overlay → out
+    const graph: Graph = {
+      nodes: [
+        node("in1", "input"),
+        node("in2", "input"),
+        node("sc", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 }),
+        node("ov", "filter", "overlay", { x: 0, y: 0 }),
+        node("out", "output"),
+      ],
+      edges: [
+        edge("in1", "sc"),
+        edge("sc", "ov", "in-main"),
+        edge("in2", "ov", "in-overlay"),
+        edge("ov", "out"),
+      ],
+    };
+    const r = buildComplexPlan(
+      graph,
+      new Map([
+        ["in1", "main.mp4"],
+        ["in2", "logo.png"],
+      ]),
+    );
+    if (isComplexError(r)) throw new Error(r.error);
+    // scale оборачивает 0:v в v1, overlay берёт v1 (основной, по in-main) и 1:v (накладка)
+    expect(r.filterComplex).toBe("[0:v]scale=1280:-2[v1];[v1][1:v]overlay=0:0[v2]");
+    expect(r.mapVideo).toBe("v2");
+  });
+});
+
 describe("buildComplexPlan — ошибки", () => {
   it("вход без выбранного файла → ошибка с id входа", () => {
     const graph: Graph = {

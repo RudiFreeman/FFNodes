@@ -11,6 +11,7 @@ import { adjust, sharpen, grayscale } from "./color";
 import { toGif } from "./gif";
 import { volume, audioFade, mono, loudnorm } from "./audio";
 import { fade, blur, vignette, reverse } from "./effects";
+import { overlay, concat } from "./merge";
 
 export type { FilterDef, FilterParam, ParamType, CommandContribution, MergeSpec } from "./types";
 
@@ -41,6 +42,8 @@ export const CATALOG: FilterDef[] = [
   blur,
   vignette,
   reverse,
+  overlay,
+  concat,
 ];
 
 // Найти фильтр по id (для ноды на холсте)
