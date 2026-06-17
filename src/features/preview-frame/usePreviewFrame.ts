@@ -1,29 +1,35 @@
-// Состояние превью-кадра «До»/«После». Тянет кадры через extract_frame (FFmpeg → JPG).
-// «До» — кадр исходника (генерится при смене файла). «После» — тот же момент, прогнанный
-// через vf-цепочку графа (пересчёт с дебаунсом при изменении графа). См. docs/ARCHITECTURE.md §7.
+// Состояние превью-кадра «До»/«После». Тянет кадры через FFmpeg (→ JPG).
+// «До» — кадр исходника (основного входа) при смене файла. «После» — тот же момент,
+// прогнанный через граф: линейный граф → -vf (extract_frame), DAG (merge/несколько входов)
+// → filter_complex (extract_frame_complex). Пересчёт с дебаунсом. См. docs/ARCHITECTURE.md §7.
 import { useEffect, useRef, useState } from "react";
-import { extractFrame } from "../../shared/api/tauri";
-import { videoFilterChain } from "../../shared/lib/ffmpeg/frame";
+import { extractFrame, extractFrameComplex } from "../../shared/api/tauri";
+import { previewPlan } from "../../shared/lib/ffmpeg/frame";
 import type { Graph } from "../../shared/types/graph";
 
 // Дебаунс пересчёта «После»: ждём, пока пользователь перестанет менять граф.
 const AFTER_DEBOUNCE_MS = 400;
 
 // Момент кадра: середина видео информативнее нулевого (часто чёрного) кадра.
-// duration может быть неизвестна (null) — тогда берём начало.
 function frameMoment(duration: number | null | undefined): number {
   return duration && duration > 0 ? duration / 2 : 0;
 }
 
 export interface PreviewFrameState {
   before: string | null; // URL кадра «До» (asset-протокол) или null
-  after: string | null; // URL кадра «После»; равен before, если фильтров нет
+  after: string | null; // URL кадра «После»; равен before, если граф ничего не меняет
   loadingBefore: boolean;
   loadingAfter: boolean;
   error: string | null;
 }
 
-export function usePreviewFrame(path: string | null, graph: Graph, duration: number | null) {
+// path — путь ОСНОВНОГО входа (для «До»). inputPaths — пути всех входов (id → path) для DAG.
+export function usePreviewFrame(
+  path: string | null,
+  graph: Graph,
+  duration: number | null,
+  inputPaths: Map<string, string>,
+) {
   const [before, setBefore] = useState<string | null>(null);
   const [after, setAfter] = useState<string | null>(null);
   const [loadingBefore, setLoadingBefore] = useState(false);
@@ -34,7 +40,7 @@ export function usePreviewFrame(path: string | null, graph: Graph, duration: num
   const beforeToken = useRef(0);
   const afterToken = useRef(0);
 
-  // Кадр «До» — при смене файла (или его длительности)
+  // Кадр «До» — при смене основного файла (или его длительности)
   const moment = frameMoment(duration);
   useEffect(() => {
     if (!path) {
@@ -59,26 +65,33 @@ export function usePreviewFrame(path: string | null, graph: Graph, duration: num
       });
   }, [path, moment]);
 
-  // vf-цепочка графа: "" — фильтров нет, null — цепочка разорвана/неполна, иначе строка.
-  // Зависит от nodes/edges; служит стабильным ключом для эффектов ниже.
-  const vf = path ? videoFilterChain(graph) : null;
+  // План кадра «После»: линейный (vf) или DAG (filter_complex). null — граф не собран.
+  const plan = path ? previewPlan(graph, inputPaths) : null;
+  // Стабильный ключ для эффекта (план — объект, пересоздаётся каждый рендер).
+  const planKey = JSON.stringify(plan);
 
-  // Когда строить «После» нечего (нет фильтров vf==="" или разрыв vf===null) — «После»
-  // зеркалит «До». Отдельный эффект: смена `before` не должна дёргать дебаунс-таймер ниже.
-  const mirrorBefore = vf === null || vf === "";
+  // Когда строить «После» нечего — зеркалим «До»:
+  //   • граф не собран (plan === null);
+  //   • линейный граф без видеофильтров (vf === "").
+  // Отдельный эффект: смена `before` не должна дёргать дебаунс-таймер ниже.
+  const mirrorBefore = plan === null || (plan.kind === "vf" && plan.vf === "");
   useEffect(() => {
     if (mirrorBefore) setAfter(before);
   }, [mirrorBefore, before]);
 
-  // Кадр «После» — пересчёт с дебаунсом при изменении vf (только когда фильтры реально есть).
-  // Зависит от path/vf/moment, но НЕ от before — иначе догрузка «До» сбрасывала бы дебаунс.
+  // Кадр «После» — пересчёт с дебаунсом при изменении плана (когда есть что строить).
+  // Зависит от planKey/moment, но НЕ от before — иначе догрузка «До» сбрасывала бы дебаунс.
   useEffect(() => {
-    if (!path || mirrorBefore) return;
+    if (!path || mirrorBefore || !plan) return;
 
     const handle = setTimeout(() => {
       const token = ++afterToken.current;
       setLoadingAfter(true);
-      extractFrame(path, vf as string, moment)
+      const request =
+        plan.kind === "vf"
+          ? extractFrame(path, plan.vf, moment)
+          : extractFrameComplex(plan.spec.inputs, plan.spec.filterComplex, plan.spec.mapVideo, moment);
+      request
         .then((url) => {
           if (token !== afterToken.current) return;
           setAfter(url);
@@ -93,7 +106,9 @@ export function usePreviewFrame(path: string | null, graph: Graph, duration: num
     }, AFTER_DEBOUNCE_MS);
 
     return () => clearTimeout(handle);
-  }, [path, vf, moment, mirrorBefore]);
+    // planKey стабилизирует объект plan; plan/path/moment/mirrorBefore читаем внутри
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, planKey, moment, mirrorBefore]);
 
   return { before, after, loadingBefore, loadingAfter, error } satisfies PreviewFrameState;
 }

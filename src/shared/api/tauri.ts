@@ -66,3 +66,20 @@ export async function extractFrame(
   const path = await invoke<string>("extract_frame", { inputPath, vf, atSec });
   return convertFileSrc(path);
 }
+
+// Кадр «После» для DAG-графа (filter_complex, несколько входов): overlay/concat/GIF-палитра.
+// inputs — пути входов в порядке -i; filterComplex — тело из построителя; mapVideo — лейбл.
+export async function extractFrameComplex(
+  inputs: string[],
+  filterComplex: string,
+  mapVideo: string | null,
+  atSec: number,
+): Promise<string> {
+  const path = await invoke<string>("extract_frame_complex", {
+    inputs,
+    filterComplex,
+    mapVideo,
+    atSec,
+  });
+  return convertFileSrc(path);
+}

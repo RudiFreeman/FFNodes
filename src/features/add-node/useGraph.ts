@@ -252,6 +252,18 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     return map;
   }, [nodes, info]);
 
+  // Пути по input-нодам (id → path) для превью-кадра DAG (filter_complex). Только входы
+  // с известным путём (без пути в filter_complex участвовать не могут).
+  const inputPaths = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const n of nodes) {
+      if (n.type !== "input-file") continue;
+      const p = n.id === INPUT_ID ? inputPath ?? undefined : (n.data as Partial<InputNodeData>).path ?? undefined;
+      if (p) map.set(n.id, p);
+    }
+    return map;
+  }, [nodes, inputPath]);
+
   // Предсказанные характеристики результата — пересчитываются на лету из графа и входов
   const predictedOutput = useMemo(
     () => predictOutput(graph, info ?? null, inputInfos),
@@ -297,5 +309,6 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     addInputNode,
     command,
     predictedOutput,
+    inputPaths, // пути входов (id → path) — для превью-кадра DAG (usePreviewFrame)
   };
 }

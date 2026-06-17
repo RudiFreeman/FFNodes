@@ -17,6 +17,7 @@ pub fn run() {
             ffmpeg::probe_media,
             ffmpeg::run_ffmpeg,
             ffmpeg::extract_frame,
+            ffmpeg::extract_frame_complex,
             ffmpeg::cancel_render
         ])
         .run(tauri::generate_context!())

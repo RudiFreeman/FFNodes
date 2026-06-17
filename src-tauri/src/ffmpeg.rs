@@ -214,6 +214,48 @@ fn build_frame_args(input_path: &str, vf: Option<&str>, at_sec: f64, out_path: &
     args
 }
 
+// Собрать аргументы ffmpeg для кадра «После» через filter_complex (DAG: merge-операции,
+// несколько входов). В отличие от build_frame_args: несколько -i, -filter_complex вместо -vf,
+// -map для выбора выходного видеопотока. -ss применяем к ПЕРВОМУ (основному) входу.
+// inputs — пути входов в порядке -i (уже safe_path); map_video — лейбл видеопотока (напр. "v1").
+fn build_frame_args_complex(
+    inputs: &[String],
+    filter_complex: &str,
+    map_video: Option<&str>,
+    at_sec: f64,
+    out_path: &str,
+) -> Vec<String> {
+    let mut args: Vec<String> = vec!["-y".into()];
+    // Быстрый seek по основному входу; для остальных входов seek не нужен (картинка/второй ролик)
+    for (i, path) in inputs.iter().enumerate() {
+        if i == 0 {
+            args.push("-ss".into());
+            args.push(format!("{at_sec}"));
+        }
+        args.push("-i".into());
+        args.push(path.clone());
+    }
+    if !filter_complex.is_empty() {
+        args.push("-filter_complex".into());
+        args.push(filter_complex.into());
+    }
+    if let Some(label) = map_video {
+        args.push("-map".into());
+        // промежуточный лейбл (без двоеточия) оборачиваем в скобки; вход (N:v) — как есть
+        args.push(if label.contains(':') {
+            label.into()
+        } else {
+            format!("[{label}]")
+        });
+    }
+    args.push("-frames:v".into());
+    args.push("1".into());
+    args.push("-q:v".into());
+    args.push("3".into());
+    args.push(out_path.into());
+    args
+}
+
 // Извлечь один кадр из видео в JPG (для превью «До»/«После»). Возвращает путь к кадру.
 // vf — цепочка фильтров из нашего генератора (для «После»); None/пусто — кадр исходника.
 // 🔒 Безопасность: ffmpeg вызывается напрямую (Command), путь и vf — отдельными аргументами
@@ -248,6 +290,48 @@ pub fn extract_frame(input_path: String, vf: Option<String>, at_sec: f64) -> Res
     // поэтому без чистки растут бесконечно.
     cleanup_old_frames(FRAME_KEEP);
 
+    Ok(out_path)
+}
+
+// Извлечь кадр «После» для DAG-графа через filter_complex (несколько входов: overlay/concat,
+// или один вход с ветвлением: GIF-палитра). inputs — пути входов в порядке -i; filter_complex —
+// тело из нашего построителя (complex/build.ts); map_video — лейбл выходного видеопотока.
+// 🔒 Те же гарантии безопасности, что у extract_frame: пути и filter_complex — отдельные
+//    аргументы массива (не shell), filter_complex из генератора (не сырой ввод). safe_path
+//    к каждому входу (N-004). Кадр пишем в ту же temp-папку с тем же префиксом (чистка общая).
+#[tauri::command]
+pub fn extract_frame_complex(
+    inputs: Vec<String>,
+    filter_complex: String,
+    map_video: Option<String>,
+    at_sec: f64,
+) -> Result<String, String> {
+    if inputs.is_empty() {
+        return Err("Нет входов для кадра".to_string());
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let mut out = std::env::temp_dir();
+    out.push(format!("ffmpeg-visual-frame-{stamp}.jpg"));
+    let out_path = out.to_string_lossy().to_string();
+
+    // N-004: каждый путь обезопасить от трактовки как флаг
+    let safe_inputs: Vec<String> = inputs.iter().map(|p| safe_path(p)).collect();
+    let args =
+        build_frame_args_complex(&safe_inputs, &filter_complex, map_video.as_deref(), at_sec, &out_path);
+
+    let output = Command::new("ffmpeg")
+        .args(&args)
+        .output()
+        .map_err(|e| format!("Не удалось запустить ffmpeg: {e}. Установлен ли FFmpeg?"))?;
+
+    if !output.status.success() {
+        return Err("ffmpeg не смог извлечь кадр (filter_complex)".to_string());
+    }
+
+    cleanup_old_frames(FRAME_KEEP);
     Ok(out_path)
 }
 
@@ -514,6 +598,42 @@ mod tests {
         // Пустая строка vf не должна добавлять флаг -vf
         let args = build_frame_args("/tmp/in.mov", Some(""), 0.0, "/tmp/out.jpg");
         assert!(!args.iter().any(|a| a == "-vf"));
+    }
+
+    #[test]
+    fn build_frame_args_complex_two_inputs() {
+        // overlay: два -i, -filter_complex, -map с промежуточным лейблом в скобках, -ss к первому
+        let inputs = vec!["/tmp/main.mp4".to_string(), "/tmp/logo.png".to_string()];
+        let args = build_frame_args_complex(
+            &inputs,
+            "[0:v][1:v]overlay=10:20[v1]",
+            Some("v1"),
+            2.5,
+            "/tmp/out.jpg",
+        );
+        // -ss перед первым входом
+        let ss = args.iter().position(|a| a == "-ss").unwrap();
+        assert_eq!(args[ss + 1], "2.5");
+        // два -i
+        assert_eq!(args.iter().filter(|a| *a == "-i").count(), 2);
+        // filter_complex присутствует
+        assert!(args.iter().any(|a| a == "-filter_complex"));
+        // map промежуточного лейбла обёрнут в скобки
+        let map = args.iter().position(|a| a == "-map").unwrap();
+        assert_eq!(args[map + 1], "[v1]");
+        // один кадр
+        assert!(args.windows(2).any(|w| w[0] == "-frames:v" && w[1] == "1"));
+    }
+
+    #[test]
+    fn build_frame_args_complex_input_label_not_bracketed() {
+        // map входного потока (с двоеточием, напр. 0:v) НЕ оборачиваем в скобки
+        let inputs = vec!["/tmp/a.mp4".to_string()];
+        let args = build_frame_args_complex(&inputs, "", Some("0:v"), 0.0, "/tmp/out.jpg");
+        let map = args.iter().position(|a| a == "-map").unwrap();
+        assert_eq!(args[map + 1], "0:v");
+        // пустой filter_complex → флага нет
+        assert!(!args.iter().any(|a| a == "-filter_complex"));
     }
 
     #[test]
