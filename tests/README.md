@@ -19,10 +19,10 @@
 | Vf-цепочка для кадра `videoFilterChain`: порядок фрагментов, только-кодек→пусто, без фильтров→пусто, разрыв→null, неизвестный фильтр→null | `src/shared/lib/ffmpeg/frame.test.ts` | 5 |
 | Перецепка при удалении `bridgesOnDelete`+`applyBridges`: средняя нода, длинная цепочка, два подряд, два несмежных, нет входящей/исходящей, мост по полному снимку, самопетля, без дублей, иммутабельность | `src/features/add-node/relink.test.ts` | 12 |
 | Пресеты «Изменить размер» `scale`: toCommand (короткая сторона/половина/свои/дефолт), applyToInfo на гориз/вертик (не раздувает), свои с авто-высотой, без размеров входа | `src/shared/lib/ffmpeg/catalog/resize.test.ts` | 11 |
-| Валидация `validateGraph` (N-007): -vn+видеофильтр, -vn+compress, -vn+-an (пустой файл), -an+громкость (needsAudio), громкость+видеофильтр (ок), валидная цепочка, только -an, только -vn, разрыв→молчит, пустая цепочка | `src/shared/lib/ffmpeg/validate.test.ts` | 10 |
+| Валидация `validateGraph` (N-007): -vn+видеофильтр, -vn+compress, -vn+-an (пустой файл), -an+громкость (needsAudio), громкость+видеофильтр (ок), валидная цепочка, только -an, только -vn, разрыв→молчит, пустая цепочка; дубль выходного флага (N-014): compress+codec оба -c:v, одна -c:v ок, разные флаги (-c:v+-f) не дубль | `src/shared/lib/ffmpeg/validate.test.ts` | 13 |
 | Защита пути `safePath` (N-004): ведущий `-` → префикс ./; абсолютные/обычные/пустой не трогаем | `src/shared/lib/ffmpeg/safePath.test.ts` | 2 |
 
-**Фронт (Vitest): 111 ✅**
+**Фронт (Vitest): 114 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 

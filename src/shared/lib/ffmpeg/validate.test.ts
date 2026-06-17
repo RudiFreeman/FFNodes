@@ -111,3 +111,29 @@ describe("validateGraph — несочетаемые операции", () => {
     expect(validateGraph(g).errors).toEqual([]);
   });
 });
+
+describe("validateGraph — дубль выходного флага (N-014)", () => {
+  it("«Сжать видео» (-c:v) + «Сменить кодек» (-c:v) → ошибка, обе ноды помечены", () => {
+    const g = chain(
+      node("a", "filter", "compress", { crf: 23 }),
+      node("b", "filter", "codec", { codec: "H.265 / HEVC" }),
+    );
+    const { errors } = validateGraph(g);
+    const dup = errors.find((e) => e.message.includes("-c:v"));
+    expect(dup).toBeDefined();
+    expect(dup!.nodeIds).toEqual(expect.arrayContaining(["a", "b"]));
+  });
+
+  it("одна операция с -c:v → нет ошибки про дубль", () => {
+    const g = chain(node("a", "filter", "compress", { crf: 23 }));
+    expect(validateGraph(g).errors.find((e) => e.message.includes("-c:v"))).toBeUndefined();
+  });
+
+  it("разные флаги (-c:v + -f gif) не считаются дублем", () => {
+    const g = chain(
+      node("a", "filter", "codec", { codec: "H.264" }),
+      node("b", "filter", "to_gif", { fps: 12, width: 480 }),
+    );
+    expect(validateGraph(g).errors.find((e) => e.message.includes("задают"))).toBeUndefined();
+  });
+});
