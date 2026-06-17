@@ -5,7 +5,7 @@
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
 import { orderedFilters } from "./chain";
-import { isLinearGraph } from "./dag";
+import { isLinearGraph, topoSort } from "./dag";
 import { buildComplexPlan } from "./complex/build";
 import { isComplexError } from "./complex/types";
 
@@ -60,4 +60,27 @@ export function previewPlan(graph: Graph, inputPaths: Map<string, string>): Prev
     kind: "complex",
     spec: { inputs: plan.inputs, filterComplex: plan.filterComplex, mapVideo: plan.mapVideo },
   };
+}
+
+// Момент (сек) для кадра «После» с учётом обрезки по времени (N-012). trim в -vf не
+// перематывает таймстемпы к нулю: после trim=start=S:end=E кадры сохраняют исходную шкалу
+// [S, E]. Кадр на середине исходника (duration/2) может оказаться ВНЕ этого диапазона —
+// ffmpeg вернёт кадр не из результата (или пустой). Поэтому при наличии trim берём середину
+// его диапазона. Берём ПЕРВУЮ trim-ноду в топо-порядке (последовательные trim — редкий край).
+// Без trim — середина исходника (duration/2), как было. Чистая функция.
+export function previewMoment(graph: Graph, duration: number | null): number {
+  const fallback = duration && duration > 0 ? duration / 2 : 0;
+  const ordered = topoSort(graph);
+  if (ordered === null) return fallback;
+
+  for (const node of ordered) {
+    if (node.kind !== "filter" || node.filterId !== "trim") continue;
+    const start = Number(node.params.start);
+    const end = Number(node.params.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    // Середина диапазона trim, подрезанная к длительности исходника (если известна)
+    const mid = (start + end) / 2;
+    return duration && duration > 0 ? Math.min(mid, duration) : mid;
+  }
+  return fallback;
 }

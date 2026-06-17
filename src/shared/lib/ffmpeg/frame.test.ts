@@ -1,6 +1,6 @@
 // Тесты извлечения vf-цепочки для превью-кадра «После». См. frame.ts.
 import { describe, it, expect } from "vitest";
-import { videoFilterChain, previewPlan } from "./frame";
+import { videoFilterChain, previewPlan, previewMoment } from "./frame";
 import type { Graph, GraphNode, GraphEdge, ParamValue } from "../../types/graph";
 
 const node = (
@@ -138,5 +138,77 @@ describe("previewPlan", () => {
       edges: [edge("in1", "ov", "in-0")], // нет второго входа и нет ov→out
     };
     expect(previewPlan(graph, new Map([["in1", "main.mp4"]]))).toBeNull();
+  });
+});
+
+describe("previewMoment (N-012)", () => {
+  it("без trim → середина исходника (duration/2)", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("a", "filter", "scale", { preset: "Свои размеры", width: 640, height: -2 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "a"), edge("a", "out")],
+    };
+    expect(previewMoment(graph, 60)).toBe(30);
+  });
+
+  it("trim → середина диапазона trim (внутри обрезки, не середина исходника)", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("t", "filter", "trim", { start: 0, end: 2 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "t"), edge("t", "out")],
+    };
+    // исходник 10с: без фикса было бы 5с (вне 0..2), с фиксом — 1с (середина 0..2)
+    expect(previewMoment(graph, 10)).toBe(1);
+  });
+
+  it("trim со сдвигом: start=4 end=8 → середина 6с", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("t", "filter", "trim", { start: 4, end: 8 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "t"), edge("t", "out")],
+    };
+    expect(previewMoment(graph, 30)).toBe(6);
+  });
+
+  it("момент trim не превышает длительность исходника", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("t", "filter", "trim", { start: 0, end: 100 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "t"), edge("t", "out")],
+    };
+    // середина 0..100 = 50, но исходник 10с → подрезаем к 10
+    expect(previewMoment(graph, 10)).toBe(10);
+  });
+
+  it("невалидный trim (end ≤ start) игнорируется → fallback середина исходника", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("t", "filter", "trim", { start: 8, end: 2 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "t"), edge("t", "out")],
+    };
+    expect(previewMoment(graph, 20)).toBe(10);
+  });
+
+  it("неизвестная длительность без trim → 0", () => {
+    const graph: Graph = {
+      nodes: [node("in", "input"), node("out", "output")],
+      edges: [edge("in", "out")],
+    };
+    expect(previewMoment(graph, null)).toBe(0);
   });
 });

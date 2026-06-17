@@ -4,7 +4,7 @@
 // → filter_complex (extract_frame_complex). Пересчёт с дебаунсом. См. docs/ARCHITECTURE.md §7.
 import { useEffect, useRef, useState } from "react";
 import { extractFrame, extractFrameComplex } from "../../shared/api/tauri";
-import { previewPlan } from "../../shared/lib/ffmpeg/frame";
+import { previewPlan, previewMoment } from "../../shared/lib/ffmpeg/frame";
 import type { Graph } from "../../shared/types/graph";
 
 // Дебаунс пересчёта «После»: ждём, пока пользователь перестанет менять граф.
@@ -79,8 +79,13 @@ export function usePreviewFrame(
     if (mirrorBefore) setAfter(before);
   }, [mirrorBefore, before]);
 
+  // Момент кадра «После» учитывает обрезку по времени (N-012): при trim берём кадр ВНУТРИ
+  // обрезанного диапазона, а не середину исходника (она может выпасть из результата).
+  // «До» остаётся на середине исходника (это исходный файл, trim к нему не применён).
+  const afterMoment = previewMoment(graph, duration);
+
   // Кадр «После» — пересчёт с дебаунсом при изменении плана (когда есть что строить).
-  // Зависит от planKey/moment, но НЕ от before — иначе догрузка «До» сбрасывала бы дебаунс.
+  // Зависит от planKey/afterMoment, но НЕ от before — иначе догрузка «До» сбрасывала бы дебаунс.
   useEffect(() => {
     if (!path || mirrorBefore || !plan) return;
 
@@ -89,8 +94,8 @@ export function usePreviewFrame(
       setLoadingAfter(true);
       const request =
         plan.kind === "vf"
-          ? extractFrame(path, plan.vf, moment)
-          : extractFrameComplex(plan.spec.inputs, plan.spec.filterComplex, plan.spec.mapVideo, moment);
+          ? extractFrame(path, plan.vf, afterMoment)
+          : extractFrameComplex(plan.spec.inputs, plan.spec.filterComplex, plan.spec.mapVideo, afterMoment);
       request
         .then((url) => {
           if (token !== afterToken.current) return;
@@ -106,9 +111,9 @@ export function usePreviewFrame(
     }, AFTER_DEBOUNCE_MS);
 
     return () => clearTimeout(handle);
-    // planKey стабилизирует объект plan; plan/path/moment/mirrorBefore читаем внутри
+    // planKey стабилизирует объект plan; plan/path/afterMoment/mirrorBefore читаем внутри
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, planKey, moment, mirrorBefore]);
+  }, [path, planKey, afterMoment, mirrorBefore]);
 
   return { before, after, loadingBefore, loadingAfter, error } satisfies PreviewFrameState;
 }
