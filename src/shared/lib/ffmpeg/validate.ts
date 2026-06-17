@@ -4,7 +4,7 @@
 // См. docs/ARCHITECTURE.md §5.
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
-import { orderedFilters } from "./chain";
+import { topoSort, incomingEdges } from "./dag";
 
 // Одна ошибка валидации: человеческое сообщение + id нод, которые её вызвали (для подсветки).
 export interface ValidationError {
@@ -35,13 +35,31 @@ function singleValueFlagsOf(outputArgs: string[] | undefined): string[] {
 }
 
 // Проверить граф на несочетаемые операции. Пустой errors — граф осмыслен.
-// Цепочку берём через orderedFilters; если она разорвана (null) — это НЕ наша забота
-// (об этом скажет генератор), валидируем только когда цепочка цела.
+// Топологию берём через topoSort (DAG: ветвление/слияние); если граф не собран (null) —
+// это НЕ наша забота (об этом скажет генератор), валидируем только когда граф цел.
+// Поддерживает merge-операции (несколько входов) — отдельное правило ниже.
 export function validateGraph(graph: Graph): ValidationResult {
-  const ordered = orderedFilters(graph);
-  if (ordered === null) return { errors: [] };
-
   const errors: ValidationError[] = [];
+
+  // Правило 0 (DAG): merge-нода с незаполненными входами — нельзя построить filter_complex.
+  // Проверяем ДО topoSort: незаполненный вход часто рвёт достижимость и topoSort даёт null.
+  for (const node of graph.nodes) {
+    if (node.kind !== "filter" || !node.filterId) continue;
+    const def = getFilterDef(node.filterId);
+    const need = def?.merge?.videoInputs ?? 0;
+    if (need <= 1) continue; // single-input merge (GIF) и обычные фильтры не проверяем
+    const have = incomingEdges(graph, node.id).length;
+    if (have < need) {
+      errors.push({
+        message: `«${def!.label}» нужно ${need} входа — подключи ещё ${need - have}. Добавь вход и соедини его с нодой.`,
+        nodeIds: [node.id],
+      });
+    }
+  }
+  if (errors.length > 0) return { errors };
+
+  const ordered = topoSort(graph);
+  if (ordered === null) return { errors: [] };
 
   // Собрать ноды по эффекту на потоки (id + читаемое имя для сообщений)
   const dropsVideo: { id: string; label: string }[] = [];
