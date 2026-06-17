@@ -199,6 +199,43 @@ describe("predictOutput", () => {
     expect(r?.width).toBe(480);
   });
 
+  it("размер (N-010): scale уменьшает разрешение → оценка размера меньше", () => {
+    // 1920×1080 → 1280×720: пиксели ×(1280·720)/(1920·1080) ≈ 0.444 → битрейт и размер меньше
+    const r = predictOutput(
+      chain(node("f", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 })),
+      input,
+    );
+    expect(r?.size_bytes).not.toBeNull();
+    expect(r!.size_bytes!).toBeLessThan(input.size_bytes!);
+  });
+
+  it("размер (N-010): trim уменьшает длительность → размер пропорционально меньше", () => {
+    // trim 0..15 из 60с: длительность ×1/4, битрейт тот же → размер ~×1/4
+    const r = predictOutput(chain(node("f", "filter", "trim", { start: 0, end: 15 })), input);
+    // оценка: (8_000_000+320_000)×15/8 = 15_600_000
+    expect(r?.size_bytes).toBe(15_600_000);
+  });
+
+  it("размер (N-010): операция без влияния на размер (flip) → реальный размер входа", () => {
+    // flip не трогает битрейт/длительность → показываем РЕАЛЬНЫЙ size_bytes входа, не оценку
+    const r = predictOutput(chain(node("f", "filter", "flip", { dir: "Горизонтально" })), input);
+    expect(r?.size_bytes).toBe(input.size_bytes);
+  });
+
+  it("размер (N-010): compress (CRF 23) на 1080p → реалистичная оценка (меньше исходных 50МБ)", () => {
+    // CRF-битрейт ~5 Мбит/с (вместо исходных 8) + аудио, ×60с → ~40МБ, меньше исходного
+    const r = predictOutput(chain(node("f", "filter", "compress", { crf: 23 })), input);
+    expect(r?.size_bytes).not.toBeNull();
+    expect(r!.size_bytes!).toBeLessThan(input.size_bytes!);
+    expect(r!.size_bytes!).toBeGreaterThan(10_000_000); // не абсурдно мало
+  });
+
+  it("размер (N-010): извлечь аудио → размер только по аудиобитрейту", () => {
+    // видео обнулено: (0+320_000)×60/8 = 2_400_000
+    const r = predictOutput(chain(node("f", "filter", "extract_audio", {})), input);
+    expect(r?.size_bytes).toBe(2_400_000);
+  });
+
   it("не мутирует входной объект", () => {
     const snapshot = { ...input };
     predictOutput(chain(node("f", "filter", "scale", { preset: "Свои размеры", width: 640, height: 360 })), input);
