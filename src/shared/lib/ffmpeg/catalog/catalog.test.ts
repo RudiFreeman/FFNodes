@@ -1,6 +1,7 @@
 // Тесты каталога фильтров. Чистая логика — table-driven (см. docs/ARCHITECTURE.md §9).
 import { describe, it, expect } from "vitest";
 import { CATALOG, getFilterDef, catalogByCategory } from "./index";
+import { atempoChain } from "./speed";
 
 describe("catalog index", () => {
   it("содержит фильтры", () => {
@@ -82,8 +83,10 @@ describe("toCommand — новые категории (поворот/скоро
     expect(getFilterDef("flip")!.toCommand({ dir: "Вертикально" }).vf).toBe("vflip");
   });
 
-  it("speed: множитель 2 → setpts=PTS/2", () => {
-    expect(getFilterDef("speed")!.toCommand({ factor: 2 }).vf).toBe("setpts=PTS/2");
+  it("speed: множитель 2 → setpts=PTS/2 + синхронный звук atempo=2", () => {
+    const c = getFilterDef("speed")!.toCommand({ factor: 2 });
+    expect(c.vf).toBe("setpts=PTS/2");
+    expect(c.af).toBe("atempo=2");
   });
 
   it("grayscale → hue=s=0", () => {
@@ -190,5 +193,38 @@ describe("toCommand — отступы, поворот на угол, затух
     const out = getFilterDef("mono")!.applyToInfo!(info, {});
     expect(out.audio_channels).toBe(1);
     expect(out.channel_layout).toBe("mono");
+  });
+});
+
+describe("atempoChain — синхронизация звука со скоростью (N-009)", () => {
+  it("в пределах диапазона: 2 → [atempo=2], 0.5 → [atempo=0.5]", () => {
+    expect(atempoChain(2)).toEqual(["atempo=2"]);
+    expect(atempoChain(0.5)).toEqual(["atempo=0.5"]);
+    expect(atempoChain(1.5)).toEqual(["atempo=1.5"]);
+  });
+
+  it("множитель 1 (без изменений) → пустая цепочка (нейтральный шаг убран)", () => {
+    expect(atempoChain(1)).toEqual([]);
+  });
+
+  it("ускорение >2 раскладывается: 4 → [atempo=2, atempo=2]", () => {
+    expect(atempoChain(4)).toEqual(["atempo=2", "atempo=2"]);
+  });
+
+  it("ускорение 3 → [atempo=2, atempo=1.5]", () => {
+    expect(atempoChain(3)).toEqual(["atempo=2", "atempo=1.5"]);
+  });
+
+  it("замедление <0.5 раскладывается: 0.25 → [atempo=0.5, atempo=0.5]", () => {
+    expect(atempoChain(0.25)).toEqual(["atempo=0.5", "atempo=0.5"]);
+  });
+
+  it("некорректный множитель (0, отрицательный) → пустая цепочка", () => {
+    expect(atempoChain(0)).toEqual([]);
+    expect(atempoChain(-2)).toEqual([]);
+  });
+
+  it("speed с множителем 4 → af цепочка atempo=2,atempo=2", () => {
+    expect(getFilterDef("speed")!.toCommand({ factor: 4 }).af).toBe("atempo=2,atempo=2");
   });
 });
