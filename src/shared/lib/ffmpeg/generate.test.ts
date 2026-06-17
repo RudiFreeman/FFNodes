@@ -123,25 +123,6 @@ describe("generateCommand — линейная цепочка по связям"
     );
   });
 
-  // Снимок текущей (однопроходной) GIF-команды — контракт ДО апгрейда на палитру (N-008).
-  // Когда to_gif перейдёт на filter_complex (split+palettegen+paletteuse), этот тест должен
-  // осознанно измениться — он сторожит границу «простой -vf путь vs filter_complex».
-  it("GIF (однопроходный, до N-008): fps+scale в -vf, формат gif", () => {
-    const graph: Graph = {
-      nodes: [
-        node("in", "input"),
-        node("f1", "filter", "to_gif", { fps: 12, width: 480 }),
-        node("out", "output"),
-      ],
-      edges: [edge("in", "f1"), edge("f1", "out")],
-    };
-    const r = generateCommand(graph);
-    expect(r.error).toBeUndefined();
-    expect(r.display).toBe(
-      'ffmpeg -i input.mp4 -vf "fps=12,scale=480:-1:flags=lanczos" -f gif output.mp4',
-    );
-  });
-
   it("реальный путь: args — полный путь, display — короткое имя", () => {
     const graph: Graph = {
       nodes: [
@@ -156,6 +137,49 @@ describe("generateCommand — линейная цепочка по связям"
     expect(r.args).toContain("/Users/me/My Videos/clip.mov");
     // display — короткое имя (для читаемости)
     expect(r.display).toBe('ffmpeg -i clip.mov -vf "fps=24" output.mp4');
+  });
+});
+
+describe("generateCommand — filter_complex путь (DAG)", () => {
+  it("GIF-палитра (N-008): split+palettegen+paletteuse через -filter_complex, -map, -f gif", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "to_gif", { fps: 12, width: 480 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    const r = generateCommand(graph);
+    expect(r.error).toBeUndefined();
+    expect(r.args).toEqual([
+      "-i",
+      "input.mp4",
+      "-filter_complex",
+      "[0:v]fps=12,scale=480:-1:flags=lanczos,split[gs1][gs2];[gs1]palettegen[gp];[gs2][gp]paletteuse[v1]",
+      "-map",
+      "[v1]",
+      "-f",
+      "gif",
+      "output.mp4",
+    ]);
+    expect(r.display).toBe(
+      'ffmpeg -i input.mp4 -filter_complex "[0:v]fps=12,scale=480:-1:flags=lanczos,split[gs1][gs2];[gs1]palettegen[gp];[gs2][gp]paletteuse[v1]" -map [v1] -f gif output.mp4',
+    );
+  });
+
+  it("GIF-палитра: реальный путь в args, короткое имя в display", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "to_gif", { fps: 15, width: 320 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    const r = generateCommand(graph, "/Users/me/clip.mov");
+    expect(r.args).toContain("/Users/me/clip.mov");
+    expect(r.display).toContain("ffmpeg -i clip.mov -filter_complex");
   });
 });
 

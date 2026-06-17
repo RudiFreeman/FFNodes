@@ -188,8 +188,19 @@ describe("isLinearGraph", () => {
     expect(isLinearGraph(graph)).toBe(false);
   });
 
-  // Ветка «нода с def.merge → false» проверяется в Фазе 4/5, когда появятся
-  // merge-операции в каталоге (to_gif с палитрой, overlay, concat).
+  it("нода с merge-операцией (to_gif палитра) → false даже при линейной топологии", () => {
+    // Топология линейна (один вход, нет ветвления), но у to_gif есть def.merge →
+    // нужен filter_complex, значит граф не «линейный» в смысле простого -vf пути.
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("g", "filter", "to_gif", { fps: 12, width: 480 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "g"), edge("g", "out")],
+    };
+    expect(isLinearGraph(graph)).toBe(false);
+  });
 });
 
 describe("incomingEdges / outgoingEdges", () => {

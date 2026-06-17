@@ -93,10 +93,21 @@ describe("toCommand — новые категории (поворот/скоро
     expect(getFilterDef("grayscale")!.toCommand({}).vf).toBe("hue=s=0");
   });
 
-  it("to_gif: vf-цепочка fps+scale + выход gif", () => {
-    const c = getFilterDef("to_gif")!.toCommand({ fps: 12, width: 480 });
-    expect(c.vf).toBe("fps=12,scale=480:-1:flags=lanczos");
-    expect(c.outputArgs).toEqual(["-f", "gif"]);
+  it("to_gif: merge-операция (палитра, N-008) — toCommand даёт только -f gif, тело в toComplex", () => {
+    const def = getFilterDef("to_gif")!;
+    // Тело фильтра ушло в merge.toComplex (filter_complex), toCommand отдаёт лишь выход gif
+    expect(def.toCommand({ fps: 12, width: 480 }).vf).toBeUndefined();
+    expect(def.toCommand({ fps: 12, width: 480 }).outputArgs).toEqual(["-f", "gif"]);
+    expect(def.merge?.videoInputs).toBe(1);
+    const fragment = def.merge!.toComplex({
+      vIn: ["0:v"],
+      aIn: [],
+      vOut: "vout",
+      params: { fps: 12, width: 480 },
+    });
+    expect(fragment).toBe(
+      "[0:v]fps=12,scale=480:-1:flags=lanczos,split[gs1][gs2];[gs1]palettegen[gp];[gs2][gp]paletteuse[vout]",
+    );
   });
 });
 
