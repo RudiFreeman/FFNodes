@@ -123,6 +123,25 @@ describe("generateCommand — линейная цепочка по связям"
     );
   });
 
+  // Снимок текущей (однопроходной) GIF-команды — контракт ДО апгрейда на палитру (N-008).
+  // Когда to_gif перейдёт на filter_complex (split+palettegen+paletteuse), этот тест должен
+  // осознанно измениться — он сторожит границу «простой -vf путь vs filter_complex».
+  it("GIF (однопроходный, до N-008): fps+scale в -vf, формат gif", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "to_gif", { fps: 12, width: 480 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    const r = generateCommand(graph);
+    expect(r.error).toBeUndefined();
+    expect(r.display).toBe(
+      'ffmpeg -i input.mp4 -vf "fps=12,scale=480:-1:flags=lanczos" -f gif output.mp4',
+    );
+  });
+
   it("реальный путь: args — полный путь, display — короткое имя", () => {
     const graph: Graph = {
       nodes: [

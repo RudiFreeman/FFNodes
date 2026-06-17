@@ -12,7 +12,7 @@ import { toGif } from "./gif";
 import { volume, audioFade, mono, loudnorm } from "./audio";
 import { fade, blur, vignette, reverse } from "./effects";
 
-export type { FilterDef, FilterParam, ParamType, CommandContribution } from "./types";
+export type { FilterDef, FilterParam, ParamType, CommandContribution, MergeSpec } from "./types";
 
 // Все доступные операции каталога
 export const CATALOG: FilterDef[] = [
