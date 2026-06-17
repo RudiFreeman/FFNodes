@@ -48,6 +48,10 @@ export interface MergeSpec {
   videoInputs: number;
   // Сколько входных аудиопотоков задействует операция (concat: 2; overlay: 0/undefined).
   audioInputs?: number;
+  // Подписи входов для UI merge-ноды (по одному на видеовход). Порядок = порядок handle
+  // (и порядок vIn в toComplex). Напр. overlay: ["Основное видео", "Накладка"]. Если не
+  // задано — подписи «Вход 1», «Вход 2»… Handle id формируются как in-0, in-1… (по индексу).
+  inputLabels?: string[];
   // Построить фрагмент filter_complex с явными лейблами потоков. Тело фильтра — то же,
   // что в toCommand().vf у обычных операций, но обёрнутое в лейблы снаружи (в build.ts).
   // vIn/aIn — входные лейблы (напр. ["0:v"] или ["v3","1:v"]); vOut/aOut — выходные.

@@ -97,3 +97,35 @@ describe("applyBridges", () => {
     expect(applyBridges(current, [])).toBe(current);
   });
 });
+
+describe("bridgesOnDelete — merge-ноды (несколько входов)", () => {
+  // Связь с именованным входом приёмника (для merge: in-0 основной, in-1 накладка)
+  const eh = (source: string, target: string, targetHandle: string): RelinkEdge => ({
+    id: `${source}-${target}-${targetHandle}`,
+    source,
+    target,
+    targetHandle,
+  });
+
+  it("удаление overlay: мостится только основной вход (in-0), накладка отцепляется", () => {
+    // in1 →[in-0] ov; in2 →[in-1] ov; ov → output. Удаляем ov.
+    const full = [
+      eh("in1", "ov", "in-0"),
+      eh("in2", "ov", "in-1"),
+      e("ov", "output"),
+    ];
+    const bridges = bridgesOnDelete(full, ["ov"]);
+    // только основной вход (in1) мостится к output; in2 (накладка) — нет
+    expect(pairs(bridges)).toEqual(["in1->output"]);
+  });
+
+  it("удаление concat: основной (первый ролик) → преемник, второй отцепляется", () => {
+    const full = [
+      eh("a", "cc", "in-0"),
+      eh("b", "cc", "in-1"),
+      e("cc", "output"),
+    ];
+    const bridges = bridgesOnDelete(full, ["cc"]);
+    expect(pairs(bridges)).toEqual(["a->output"]);
+  });
+});

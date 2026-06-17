@@ -69,16 +69,23 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
         onParamChange,
       };
 
+      // Merge-операция (overlay/concat) имеет несколько входов — её НЕ вставляем линейно
+      // в цепочку (это разорвало бы смысл двух входов). Кладём на холст, пользователь сам
+      // подключает входы к её именованным хэндлам. Обычный фильтр — авто-вставка как раньше.
+      const isMerge = Boolean(def.merge);
+
       setNodes((prev) => {
-        const count = prev.filter((n) => n.type === "filter").length;
+        const count = prev.filter((n) => n.type === "filter" || n.type === "merge").length;
         const node: Node = {
           id: newId,
-          type: "filter",
+          type: isMerge ? "merge" : "filter",
           position: { x: 280, y: 80 + count * 110 },
           data,
         };
         return [...prev, node];
       });
+
+      if (isMerge) return; // без авто-рёбер — два входа подключает пользователь
 
       // Перецепить: то, что входило в output, теперь входит в newId; newId → output
       setEdges((prev) => {
@@ -136,9 +143,17 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     });
   }, [setNodes, chooseInputFile]);
 
-  // Соединение нод пользователем вручную
+  // Соединение нод пользователем вручную. В один входной хэндл (target+targetHandle) ведёт
+  // только ОДНО ребро: при новом подключении к занятому хэндлу старое заменяется. Это важно
+  // для merge-нод — каждый именованный вход (основное видео / накладка) принимает один источник.
   const onConnect = useCallback(
-    (conn: Connection) => setEdges((prev) => addEdge(conn, prev)),
+    (conn: Connection) =>
+      setEdges((prev) => {
+        const freed = prev.filter(
+          (e) => !(e.target === conn.target && (e.targetHandle ?? null) === (conn.targetHandle ?? null)),
+        );
+        return addEdge(conn, freed);
+      }),
     [setEdges],
   );
 
@@ -214,7 +229,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     setNodes((prev) => {
       let changed = false;
       const next = prev.map((n) => {
-        if (n.type !== "filter") return n;
+        if (n.type !== "filter" && n.type !== "merge") return n;
         const want = invalidIds.has(n.id);
         const d = n.data as { invalid?: boolean; invalidReason?: string };
         const reason = want ? invalidReason : "";

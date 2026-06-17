@@ -24,6 +24,7 @@ export const overlay: FilterDef = {
   streams: { needsVideo: true },
   merge: {
     videoInputs: 2,
+    inputLabels: ["Основное видео", "Накладка"],
     // [main][ov]overlay=x:y[vout] — накладка позиционируется по x:y
     toComplex: ({ vIn, vOut, params }) =>
       `[${vIn[0]}][${vIn[1]}]overlay=${params.x}:${params.y}[${vOut}]`,
@@ -48,6 +49,7 @@ export const concat: FilterDef = {
   merge: {
     videoInputs: 2,
     audioInputs: 2,
+    inputLabels: ["Первый ролик", "Второй ролик"],
     // [v0][a0][v1][a1]concat=n=2:v=1:a=1[vout][aout] — n=2 входа, по 1 видео+аудио на выходе
     toComplex: ({ vIn, aIn, vOut, aOut }) =>
       `[${vIn[0]}][${aIn[0]}][${vIn[1]}][${aIn[1]}]concat=n=2:v=1:a=1[${vOut}][${aOut}]`,
