@@ -211,4 +211,33 @@ describe("previewMoment (N-012)", () => {
     };
     expect(previewMoment(graph, null)).toBe(0);
   });
+
+  it("speed НЕ влияет на момент: середина исходника (кадр валиден, setpts только меняет PTS)", () => {
+    // Намеренная страховка: speed=setpts меняет лишь временну́ю шкалу, не содержимое.
+    // -ss seek-ит по исходнику ДО vf → кадр на середине исходника репрезентативен и совпадает
+    // с «До». Делить момент на factor НЕЛЬЗЯ — это рассогласовало бы кадры «До»/«После».
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("s", "filter", "speed", { factor: 4 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "s"), edge("s", "out")],
+    };
+    expect(previewMoment(graph, 10)).toBe(5);
+  });
+
+  it("trim перед speed: момент по trim (trim определяет видимый диапазон)", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("t", "filter", "trim", { start: 2, end: 6 }),
+        node("s", "filter", "speed", { factor: 2 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "t"), edge("t", "s"), edge("s", "out")],
+    };
+    // trim 2..6 → середина 4с (speed момент не меняет)
+    expect(previewMoment(graph, 30)).toBe(4);
+  });
 });

@@ -19,13 +19,13 @@
 | Построитель filter_complex `buildComplexPlan` (`complex/build.test.ts`): обычные фильтры в лейблах, свежий лейбл на шаг, фильтр без vf насквозь, два входа, overlay/concat end-to-end, scale перед overlay, ошибки (нет файла, обрыв, неизвестный фильтр) | `src/shared/lib/ffmpeg/complex/build.test.ts` | 11 |
 | merge-операции `overlay`/`concat` (`catalog/merge.test.ts`): videoInputs/audioInputs, toComplex-фрагмент, applyMerge (overlay=размер основного, concat=сумма длительностей) | `src/shared/lib/ffmpeg/catalog/merge.test.ts` | 7 |
 | Предсказание `predictOutput`: scale/fps/trim/speed/rotate/gif/аудио, цепочка, без applyToInfo, иммутабельность; слияние (overlay=размер основного, concat=сумма длительностей, GIF через applyToInfo) | `src/shared/lib/ffmpeg/predict.test.ts` | 17 |
-| Vf-цепочка для кадра `videoFilterChain`: порядок фрагментов, только-кодек→пусто, без фильтров→пусто, разрыв→null, неизвестный фильтр→null; план кадра `previewPlan` (линейный→vf, GIF/overlay→complex, обрыв→null); момент кадра `previewMoment` (N-012: без trim→duration/2, trim→середина диапазона, сдвиг, clamp к длительности, невалидный trim→fallback, null→0) | `src/shared/lib/ffmpeg/frame.test.ts` | 15 |
+| Vf-цепочка для кадра `videoFilterChain`: порядок фрагментов, только-кодек→пусто, без фильтров→пусто, разрыв→null, неизвестный фильтр→null; план кадра `previewPlan` (линейный→vf, GIF/overlay→complex, обрыв→null); момент кадра `previewMoment` (N-012: без trim→duration/2, trim→середина диапазона, сдвиг, clamp к длительности, невалидный trim→fallback, null→0, speed не влияет на момент, trim+speed→по trim) | `src/shared/lib/ffmpeg/frame.test.ts` | 17 |
 | Перецепка при удалении `bridgesOnDelete`+`applyBridges`: средняя нода, длинная цепочка, два подряд, два несмежных, нет входящей/исходящей, мост по полному снимку, самопетля, без дублей, иммутабельность; merge-ноды (мостим только основной вход по min targetHandle, накладка/второй ролик отцепляется) | `src/features/add-node/relink.test.ts` | 14 |
 | Пресеты «Изменить размер» `scale`: toCommand (короткая сторона/половина/свои/дефолт), applyToInfo на гориз/вертик (не раздувает), свои с авто-высотой, без размеров входа | `src/shared/lib/ffmpeg/catalog/resize.test.ts` | 11 |
 | Валидация `validateGraph` (N-007): -vn+видеофильтр, -vn+compress, -vn+-an (пустой файл), -an+громкость (needsAudio), громкость+видеофильтр (ок), валидная цепочка, только -an, только -vn, разрыв→молчит, пустая цепочка; дубль выходного флага (N-014): compress+codec оба -c:v, одна -c:v ок, разные флаги (-c:v+-f) не дубль; merge без второго входа (overlay 1 вход→ошибка, 2 входа→ок, GIF single-input→ок) | `src/shared/lib/ffmpeg/validate.test.ts` | 16 |
 | Защита пути `safePath` (N-004): ведущий `-` → префикс ./; абсолютные/обычные/пустой не трогаем | `src/shared/lib/ffmpeg/safePath.test.ts` | 2 |
 
-**Фронт (Vitest): 169 ✅**
+**Фронт (Vitest): 171 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
