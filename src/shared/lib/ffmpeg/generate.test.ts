@@ -140,6 +140,64 @@ describe("generateCommand — линейная цепочка по связям"
   });
 });
 
+describe("generateCommand — filter_complex путь (DAG)", () => {
+  it("GIF-палитра (N-008): split+palettegen+paletteuse через -filter_complex, -map, -f gif", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "to_gif", { fps: 12, width: 480 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    const r = generateCommand(graph);
+    expect(r.error).toBeUndefined();
+    expect(r.args).toEqual([
+      "-i",
+      "input.mp4",
+      "-filter_complex",
+      "[0:v]fps=12,scale=480:-1:flags=lanczos,split[gs1][gs2];[gs1]palettegen[gp];[gs2][gp]paletteuse[v1]",
+      "-map",
+      "[v1]",
+      "-f",
+      "gif",
+      "output.mp4",
+    ]);
+    expect(r.display).toBe(
+      'ffmpeg -i input.mp4 -filter_complex "[0:v]fps=12,scale=480:-1:flags=lanczos,split[gs1][gs2];[gs1]palettegen[gp];[gs2][gp]paletteuse[v1]" -map [v1] -f gif output.mp4',
+    );
+  });
+
+  it("путь входа берётся из params.path ноды (multi-input модель)", () => {
+    // У input-ноды путь задан прямо в params (как для дополнительных входов в Фазе 3)
+    const graph: Graph = {
+      nodes: [
+        node("in", "input", undefined, { path: "/videos/from-params.mp4" }),
+        node("f1", "filter", "to_gif", { fps: 12, width: 480 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    // inputPath не передаём — путь должен прийти из params.path
+    const r = generateCommand(graph);
+    expect(r.args).toContain("/videos/from-params.mp4");
+  });
+
+  it("GIF-палитра: реальный путь в args, короткое имя в display", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("f1", "filter", "to_gif", { fps: 15, width: 320 }),
+        node("out", "output"),
+      ],
+      edges: [edge("in", "f1"), edge("f1", "out")],
+    };
+    const r = generateCommand(graph, "/Users/me/clip.mov");
+    expect(r.args).toContain("/Users/me/clip.mov");
+    expect(r.display).toContain("ffmpeg -i clip.mov -filter_complex");
+  });
+});
+
 describe("generateCommand — неполный граф → ошибка, не падение", () => {
   it("нет output", () => {
     const graph: Graph = {

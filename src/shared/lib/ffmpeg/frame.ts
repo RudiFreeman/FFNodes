@@ -5,6 +5,9 @@
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
 import { orderedFilters } from "./chain";
+import { isLinearGraph, topoSort } from "./dag";
+import { buildComplexPlan } from "./complex/build";
+import { isComplexError } from "./complex/types";
 
 // Собрать строку -vf из графа: фрагменты фильтров через запятую (порядок цепочки).
 // Возвращает:
@@ -23,4 +26,61 @@ export function videoFilterChain(graph: Graph): string | null {
     if (contrib.vf) parts.push(contrib.vf);
   }
   return parts.join(",");
+}
+
+// Спецификация кадра «После» для DAG-графа (filter_complex, несколько входов).
+// Используется, когда граф НЕ линейный (merge-операции/несколько входов): простой -vf
+// не годится. inputs — пути входов в порядке -i; filterComplex — тело; mapVideo — лейбл
+// видеопотока для -map. null — граф не собран (кадр «После» строить не из чего).
+export interface PreviewComplexSpec {
+  inputs: string[];
+  filterComplex: string;
+  mapVideo: string | null;
+}
+
+// Какой способ строить кадр «После» нужен для данного графа.
+//   { kind: "vf", vf }       — линейный граф: простая -vf строка (vf может быть "");
+//   { kind: "complex", spec } — DAG: filter_complex с несколькими входами;
+//   null                      — граф не собран.
+export type PreviewPlan =
+  | { kind: "vf"; vf: string }
+  | { kind: "complex"; spec: PreviewComplexSpec }
+  | null;
+
+// Решить, как строить кадр «После». inputPaths — пути входных нод (id → path) для DAG.
+export function previewPlan(graph: Graph, inputPaths: Map<string, string>): PreviewPlan {
+  if (isLinearGraph(graph)) {
+    const vf = videoFilterChain(graph);
+    return vf === null ? null : { kind: "vf", vf };
+  }
+  // DAG: строим план filter_complex (тот же, что для рендера, но без outputArgs-кодеков)
+  const plan = buildComplexPlan(graph, inputPaths);
+  if (isComplexError(plan)) return null;
+  return {
+    kind: "complex",
+    spec: { inputs: plan.inputs, filterComplex: plan.filterComplex, mapVideo: plan.mapVideo },
+  };
+}
+
+// Момент (сек) для кадра «После» с учётом обрезки по времени (N-012). trim в -vf не
+// перематывает таймстемпы к нулю: после trim=start=S:end=E кадры сохраняют исходную шкалу
+// [S, E]. Кадр на середине исходника (duration/2) может оказаться ВНЕ этого диапазона —
+// ffmpeg вернёт кадр не из результата (или пустой). Поэтому при наличии trim берём середину
+// его диапазона. Берём ПЕРВУЮ trim-ноду в топо-порядке (последовательные trim — редкий край).
+// Без trim — середина исходника (duration/2), как было. Чистая функция.
+export function previewMoment(graph: Graph, duration: number | null): number {
+  const fallback = duration && duration > 0 ? duration / 2 : 0;
+  const ordered = topoSort(graph);
+  if (ordered === null) return fallback;
+
+  for (const node of ordered) {
+    if (node.kind !== "filter" || node.filterId !== "trim") continue;
+    const start = Number(node.params.start);
+    const end = Number(node.params.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    // Середина диапазона trim, подрезанная к длительности исходника (если известна)
+    const mid = (start + end) / 2;
+    return duration && duration > 0 ? Math.min(mid, duration) : mid;
+  }
+  return fallback;
 }

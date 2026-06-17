@@ -111,3 +111,72 @@ describe("validateGraph — несочетаемые операции", () => {
     expect(validateGraph(g).errors).toEqual([]);
   });
 });
+
+describe("validateGraph — дубль выходного флага (N-014)", () => {
+  it("«Сжать видео» (-c:v) + «Сменить кодек» (-c:v) → ошибка, обе ноды помечены", () => {
+    const g = chain(
+      node("a", "filter", "compress", { crf: 23 }),
+      node("b", "filter", "codec", { codec: "H.265 / HEVC" }),
+    );
+    const { errors } = validateGraph(g);
+    const dup = errors.find((e) => e.message.includes("-c:v"));
+    expect(dup).toBeDefined();
+    expect(dup!.nodeIds).toEqual(expect.arrayContaining(["a", "b"]));
+  });
+
+  it("одна операция с -c:v → нет ошибки про дубль", () => {
+    const g = chain(node("a", "filter", "compress", { crf: 23 }));
+    expect(validateGraph(g).errors.find((e) => e.message.includes("-c:v"))).toBeUndefined();
+  });
+
+  it("разные флаги (-c:v + -f gif) не считаются дублем", () => {
+    const g = chain(
+      node("a", "filter", "codec", { codec: "H.264" }),
+      node("b", "filter", "to_gif", { fps: 12, width: 480 }),
+    );
+    expect(validateGraph(g).errors.find((e) => e.message.includes("задают"))).toBeUndefined();
+  });
+});
+
+describe("validateGraph — merge-операции (несколько входов)", () => {
+  it("overlay с одним подключённым входом → ошибка с id merge-ноды", () => {
+    // только in1 → overlay; второй вход не подключён; overlay → out
+    const g: Graph = {
+      nodes: [
+        node("in1", "input"),
+        node("ov", "filter", "overlay", { x: 0, y: 0 }),
+        node("out", "output"),
+      ],
+      edges: [
+        { id: "1", source: "in1", target: "ov", targetHandle: "in-0" },
+        { id: "2", source: "ov", target: "out" },
+      ],
+    };
+    const { errors } = validateGraph(g);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].nodeIds).toEqual(["ov"]);
+    expect(errors[0].message).toContain("вход");
+  });
+
+  it("overlay с обоими входами → нет ошибки про входы", () => {
+    const g: Graph = {
+      nodes: [
+        node("in1", "input"),
+        node("in2", "input"),
+        node("ov", "filter", "overlay", { x: 0, y: 0 }),
+        node("out", "output"),
+      ],
+      edges: [
+        { id: "1", source: "in1", target: "ov", targetHandle: "in-0" },
+        { id: "2", source: "in2", target: "ov", targetHandle: "in-1" },
+        { id: "3", source: "ov", target: "out" },
+      ],
+    };
+    expect(validateGraph(g).errors).toHaveLength(0);
+  });
+
+  it("GIF (single-input merge) НЕ требует второго входа", () => {
+    const g = chain(node("g", "filter", "to_gif", { fps: 12, width: 480 }));
+    expect(validateGraph(g).errors).toHaveLength(0);
+  });
+});

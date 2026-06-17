@@ -37,6 +37,40 @@ export interface StreamEffect {
   needsAudio?: boolean; // работает по звуку (аудиофильтр -af) — бессмыслен без аудиопотока
 }
 
+// Спецификация merge-операции (слияние/ветвление потоков) — требует filter_complex.
+// Наличие merge у FilterDef = «это не простой -vf фильтр»: генератор уходит на
+// filter_complex-путь (см. dag.isLinearGraph, complex/build.ts). У 27 single-фильтров
+// этого поля нет — они продолжают работать через -vf/-af как раньше.
+export interface MergeSpec {
+  // Сколько ВНЕШНИХ входных видеопотоков нужно операции:
+  //   1 — single-input с внутренним ветвлением (GIF: split→palettegen→paletteuse);
+  //   2 — слияние двух источников (overlay, concat).
+  videoInputs: number;
+  // Сколько входных аудиопотоков задействует операция (concat: 2; overlay: 0/undefined).
+  audioInputs?: number;
+  // Подписи входов для UI merge-ноды (по одному на видеовход). Порядок = порядок handle
+  // (и порядок vIn в toComplex). Напр. overlay: ["Основное видео", "Накладка"]. Если не
+  // задано — подписи «Вход 1», «Вход 2»… Handle id формируются как in-0, in-1… (по индексу).
+  inputLabels?: string[];
+  // Построить фрагмент filter_complex с явными лейблами потоков. Тело фильтра — то же,
+  // что в toCommand().vf у обычных операций, но обёрнутое в лейблы снаружи (в build.ts).
+  // vIn/aIn — входные лейблы (напр. ["0:v"] или ["v3","1:v"]); vOut/aOut — выходные.
+  toComplex: (ctx: {
+    vIn: string[];
+    aIn: string[];
+    vOut: string;
+    aOut?: string;
+    params: Record<string, ParamValue>;
+  }) => string;
+  // Предсказание характеристик при слиянии: primary — основной (нижний/первый) поток,
+  // secondary — второй вход (null для single-input merge). См. predict.ts (Фаза 6).
+  applyMerge?: (
+    primary: MediaInfo,
+    secondary: MediaInfo | null,
+    params: Record<string, ParamValue>,
+  ) => MediaInfo;
+}
+
 // Определение одной операции/фильтра
 export interface FilterDef {
   id: string; // 'scale'
@@ -53,4 +87,7 @@ export interface FilterDef {
   // Влияние на потоки — для валидации несочетаемых операций (N-007). Необязательно:
   // операция без этого поля считается нейтральной к потокам.
   streams?: StreamEffect;
+  // Merge-операция (слияние/ветвление потоков, filter_complex). Необязательно: у обычных
+  // single-фильтров его нет — они идут простым -vf/-af путём. См. MergeSpec выше.
+  merge?: MergeSpec;
 }

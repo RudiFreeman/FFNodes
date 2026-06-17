@@ -2,6 +2,7 @@
 import type { FilterDef } from "./types";
 import type { MediaInfo } from "../../../types/media";
 import type { ParamValue } from "../../../types/graph";
+import { scaleVideoBitrate } from "../size";
 
 const CATEGORY = "Размер / FPS";
 
@@ -87,49 +88,110 @@ function scaleFilter(p: Record<string, ParamValue>): string {
   return `scale=w=${w}:h=${h}`;
 }
 
-// Пересчитать характеристики «После» под выбранный пресет
+// Пересчитать характеристики «После» под выбранный пресет.
+// Возвращает новые width/height + масштабированный по числу пикселей video_bitrate (N-010).
 function applyScale(info: MediaInfo, p: Record<string, ParamValue>): MediaInfo {
   const preset = String(p.preset ?? PRESET_1080);
+
+  // Вычисляем итоговые размеры (outW/outH), затем единый return с масштабом битрейта
+  let outW = info.width;
+  let outH = info.height;
 
   if (preset === PRESET_CUSTOM) {
     const w = Number(p.width);
     const h = Number(p.height);
     const auto = (v: number) => v === -1 || v === -2;
-    let outW = w;
-    let outH = h;
+    let cw = w;
+    let ch = h;
     if (auto(w) && !auto(h) && info.width && info.height) {
-      outW = Math.round((info.width / info.height) * h);
+      cw = Math.round((info.width / info.height) * h);
     } else if (auto(h) && !auto(w) && info.width && info.height) {
-      outH = Math.round((info.height / info.width) * w);
+      ch = Math.round((info.height / info.width) * w);
     }
+    outW = auto(cw) ? info.width : cw;
+    outH = auto(ch) ? info.height : ch;
+  } else if (!info.width || !info.height) {
+    // Без размеров входа предсказать не можем — оставляем как есть
+    return { ...info };
+  } else if (preset === PRESET_HALF) {
+    outW = even(info.width / 2);
+    outH = even(info.height / 2);
+  } else {
+    const n = SHORT_SIDE[preset];
+    if (n === undefined) return { ...info };
+    const horizontal = info.width > info.height;
+    if (horizontal) {
+      // Гориз: высота = N (короткая), ширина по пропорции
+      outH = n;
+      outW = even((info.width / info.height) * n);
+    } else {
+      // Верт/квадрат: ширина = N (короткая), высота по пропорции
+      outW = n;
+      outH = even((info.height / info.width) * n);
+    }
+  }
+
+  return {
+    ...info,
+    width: outW,
+    height: outH,
+    // Битрейт ∝ числу пикселей: уменьшили разрешение → меньше битрейт → меньше файл
+    video_bitrate: scaleVideoBitrate(
+      info.video_bitrate,
+      info.width,
+      info.height,
+      info.fps,
+      outW,
+      outH,
+      info.fps,
+    ),
+  };
+}
+
+// Вписать кадр в целевой размер и дополнить чёрными полями (леттербокс/паддинг).
+// Сначала scale с force_original_aspect_ratio=decrease — кадр уменьшается, чтобы влезть
+// в W×H без растяжения (пропорции сохранены); затем pad центрирует и добивает поля до W×H.
+// N-015: scale перед pad убирает падение при цель<входа — кадр любого размера всегда влезает.
+export const pad: FilterDef = {
+  id: "pad",
+  category: CATEGORY,
+  label: "Отступы / леттербокс",
+  description:
+    "Вписывает видео в целевой размер без растяжения и добивает поля до него чёрным. " +
+    "Зачем: подогнать под формат соцсети (например горизонтальное в квадрат 1080×1080). " +
+    "Кадр уменьшается, чтобы влезть, и центрируется — пропорции сохраняются.",
+  params: [
+    { id: "width", label: "Ширина", type: "number", default: 1080, hint: "в пикселях" },
+    { id: "height", label: "Высота", type: "number", default: 1080, hint: "в пикселях" },
+  ],
+  // Вписать (decrease — только уменьшать, не раздувать), затем дополнить полями по центру.
+  toCommand: (p) => ({
+    vf:
+      `scale=${p.width}:${p.height}:force_original_aspect_ratio=decrease,` +
+      `pad=${p.width}:${p.height}:(ow-iw)/2:(oh-ih)/2`,
+  }),
+  streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
+  applyToInfo: (info, p) => {
+    const outW = Number(p.width);
+    const outH = Number(p.height);
     return {
       ...info,
-      width: auto(outW) ? info.width : outW,
-      height: auto(outH) ? info.height : outH,
+      width: outW,
+      height: outH,
+      // Битрейт ∝ пикселям. Грубо: чёрные поля сжимаются почти бесплатно, поэтому оценка
+      // может быть завышена — но в UI всё равно «≈» (N-010).
+      video_bitrate: scaleVideoBitrate(
+        info.video_bitrate,
+        info.width,
+        info.height,
+        info.fps,
+        outW,
+        outH,
+        info.fps,
+      ),
     };
-  }
-
-  // Без размеров входа предсказать не можем — оставляем как есть
-  if (!info.width || !info.height) return { ...info };
-
-  if (preset === PRESET_HALF) {
-    return { ...info, width: even(info.width / 2), height: even(info.height / 2) };
-  }
-
-  const n = SHORT_SIDE[preset];
-  if (n === undefined) return { ...info };
-  const horizontal = info.width > info.height;
-  if (horizontal) {
-    // Гориз: высота = N (короткая), ширина по пропорции
-    const outH = n;
-    const outW = even((info.width / info.height) * n);
-    return { ...info, width: outW, height: outH };
-  }
-  // Верт/квадрат: ширина = N (короткая), высота по пропорции
-  const outW = n;
-  const outH = even((info.height / info.width) * n);
-  return { ...info, width: outW, height: outH };
-}
+  },
+};
 
 // Сменить частоту кадров
 export const fps: FilterDef = {
@@ -144,5 +206,21 @@ export const fps: FilterDef = {
   ],
   toCommand: (p) => ({ vf: `fps=${p.value}` }),
   streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
-  applyToInfo: (info, p) => ({ ...info, fps: Number(p.value) }),
+  applyToInfo: (info, p) => {
+    const newFps = Number(p.value);
+    return {
+      ...info,
+      fps: newFps,
+      // Битрейт ∝ fps: меньше кадров/сек → меньше битрейт → меньше файл (N-010)
+      video_bitrate: scaleVideoBitrate(
+        info.video_bitrate,
+        info.width,
+        info.height,
+        info.fps,
+        info.width,
+        info.height,
+        newFps,
+      ),
+    };
+  },
 };

@@ -1,8 +1,17 @@
 // Категория «Конвертация / Сжатие» — операции, влияющие на выходные опции (не на -vf).
 // Используют outputArgs (флаги команды). См. docs/ARCHITECTURE.md §3.
 import type { FilterDef } from "./types";
+import { estimateBitrateFromCrf } from "../size";
 
 const CATEGORY = "Конвертация / Сжатие";
+
+// Относительная эффективность кодеков (множитель к битрейту при том же качестве).
+// H.265/VP9 при той же визуальной чёткости дают ~меньший битрейт, чем H.264.
+const CODEC_BITRATE_FACTOR: Record<string, number> = {
+  "H.264": 1.0,
+  "H.265 / HEVC": 0.6, // ~40% экономии при том же качестве
+  VP9: 0.65,
+};
 
 // Сжать видео (CRF — постоянное качество). Меньше CRF = лучше качество и больше файл.
 export const compress: FilterDef = {
@@ -23,8 +32,15 @@ export const compress: FilterDef = {
   ],
   toCommand: (p) => ({ outputArgs: ["-c:v", "libx264", "-crf", String(p.crf)] }),
   streams: { needsVideo: true }, // -c:v перекодирует видео — нужен видеопоток
-  // Перекодирование в H.264. Размер файла честно не предсказываем (зависит от CRF и контента).
-  applyToInfo: (info) => ({ ...info, video_codec: "h264" }),
+  // Перекодирование в H.264 с заданным CRF. Битрейт оцениваем из CRF+разрешения+fps (N-010):
+  // это эмпирика (точный зависит от контента), в UI помечен «≈».
+  applyToInfo: (info, p) => ({
+    ...info,
+    video_codec: "h264",
+    video_bitrate:
+      estimateBitrateFromCrf(info.width, info.height, info.fps, Number(p.crf)) ??
+      info.video_bitrate,
+  }),
 };
 
 // Сменить видеокодек. Энкодер и итоговый кодек по выбору пользователя.
@@ -59,10 +75,17 @@ export const changeCodec: FilterDef = {
     outputArgs: ["-c:v", CODEC_ENCODER[String(p.codec)] ?? "libx264"],
   }),
   streams: { needsVideo: true }, // -c:v перекодирует видео — нужен видеопоток
-  applyToInfo: (info, p) => ({
-    ...info,
-    video_codec: CODEC_NAME[String(p.codec)] ?? "h264",
-  }),
+  applyToInfo: (info, p) => {
+    const codec = String(p.codec);
+    const factor = CODEC_BITRATE_FACTOR[codec] ?? 1.0;
+    return {
+      ...info,
+      video_codec: CODEC_NAME[codec] ?? "h264",
+      // H.265/VP9 при том же качестве дают меньший битрейт → меньше файл (оценка, N-010)
+      video_bitrate:
+        info.video_bitrate != null ? Math.round(info.video_bitrate * factor) : info.video_bitrate,
+    };
+  },
 };
 
 // Извлечь аудио — выкинуть видеодорожку, оставить звук

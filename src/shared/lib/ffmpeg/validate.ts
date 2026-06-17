@@ -4,7 +4,7 @@
 // См. docs/ARCHITECTURE.md §5.
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
-import { orderedFilters } from "./chain";
+import { topoSort, incomingEdges } from "./dag";
 
 // Одна ошибка валидации: человеческое сообщение + id нод, которые её вызвали (для подсветки).
 export interface ValidationError {
@@ -16,14 +16,50 @@ export interface ValidationResult {
   errors: ValidationError[];
 }
 
-// Проверить граф на несочетаемые операции. Пустой errors — граф осмыслен.
-// Цепочку берём через orderedFilters; если она разорвана (null) — это НЕ наша забота
-// (об этом скажет генератор), валидируем только когда цепочка цела.
-export function validateGraph(graph: Graph): ValidationResult {
-  const ordered = orderedFilters(graph);
-  if (ordered === null) return { errors: [] };
+// Выходные флаги, которые задают ОДНО значение и не должны дублироваться разными операциями
+// (N-014): если две ноды выставят, например, разные `-c:v`, ffmpeg возьмёт последний — первая
+// операция молча игнорируется. Ключ — флаг, значение — человеческое имя для сообщения.
+// Только value-флаги; ключи-переключатели (-vn/-an) повторять безвредно — их тут нет.
+const SINGLE_VALUE_FLAGS: Record<string, string> = {
+  "-c:v": "видеокодек",
+  "-c:a": "аудиокодек",
+  "-f": "формат контейнера",
+};
 
+// Собрать из outputArgs операции набор «однозначных» флагов, которые она задаёт.
+// outputArgs — плоский массив [флаг, значение, флаг, значение…]; берём те флаги из
+// SINGLE_VALUE_FLAGS, что в нём встречаются.
+function singleValueFlagsOf(outputArgs: string[] | undefined): string[] {
+  if (!outputArgs) return [];
+  return outputArgs.filter((tok) => tok in SINGLE_VALUE_FLAGS);
+}
+
+// Проверить граф на несочетаемые операции. Пустой errors — граф осмыслен.
+// Топологию берём через topoSort (DAG: ветвление/слияние); если граф не собран (null) —
+// это НЕ наша забота (об этом скажет генератор), валидируем только когда граф цел.
+// Поддерживает merge-операции (несколько входов) — отдельное правило ниже.
+export function validateGraph(graph: Graph): ValidationResult {
   const errors: ValidationError[] = [];
+
+  // Правило 0 (DAG): merge-нода с незаполненными входами — нельзя построить filter_complex.
+  // Проверяем ДО topoSort: незаполненный вход часто рвёт достижимость и topoSort даёт null.
+  for (const node of graph.nodes) {
+    if (node.kind !== "filter" || !node.filterId) continue;
+    const def = getFilterDef(node.filterId);
+    const need = def?.merge?.videoInputs ?? 0;
+    if (need <= 1) continue; // single-input merge (GIF) и обычные фильтры не проверяем
+    const have = incomingEdges(graph, node.id).length;
+    if (have < need) {
+      errors.push({
+        message: `«${def!.label}» нужно ${need} входа — подключи ещё ${need - have}. Добавь вход и соедини его с нодой.`,
+        nodeIds: [node.id],
+      });
+    }
+  }
+  if (errors.length > 0) return { errors };
+
+  const ordered = topoSort(graph);
+  if (ordered === null) return { errors: [] };
 
   // Собрать ноды по эффекту на потоки (id + читаемое имя для сообщений)
   const dropsVideo: { id: string; label: string }[] = [];
@@ -68,6 +104,31 @@ export function validateGraph(graph: Graph): ValidationResult {
       message: `«${dropLabel}» убирает звуковую дорожку — операции по звуку (${needLabels}) работать не будут. Убери одно из двух.`,
       nodeIds: [...dropsAudio.map((n) => n.id), ...needsAudio.map((n) => n.id)],
     });
+  }
+
+  // 4) Две операции задают один и тот же «однозначный» выходной флаг (N-014).
+  // Напр. «Сжать видео» и «Сменить кодек» обе кладут -c:v — ffmpeg возьмёт последний,
+  // первая операция бессмысленна. Собираем флаг → задавшие его ноды.
+  const flagSetters = new Map<string, { id: string; label: string }[]>();
+  for (const node of ordered) {
+    const def = node.filterId ? getFilterDef(node.filterId) : undefined;
+    if (!def) continue;
+    const flags = singleValueFlagsOf(def.toCommand(node.params).outputArgs);
+    for (const flag of flags) {
+      const list = flagSetters.get(flag) ?? [];
+      list.push({ id: node.id, label: def.label });
+      flagSetters.set(flag, list);
+    }
+  }
+  for (const [flag, setters] of flagSetters) {
+    if (setters.length > 1) {
+      const what = SINGLE_VALUE_FLAGS[flag];
+      const labels = setters.map((s) => `«${s.label}»`).join(" и ");
+      errors.push({
+        message: `${labels} обе задают ${what} (${flag}) — сработает только последняя, остальные впустую. Оставь одну.`,
+        nodeIds: setters.map((s) => s.id),
+      });
+    }
   }
 
   return { errors };

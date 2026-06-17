@@ -2,18 +2,20 @@
 // группы-аккордеоны (по умолчанию свёрнуты). Звёздочки — как эффекты в Premiere.
 // См. docs/ARCHITECTURE.md §3, docs/UI.md §4.
 import { useMemo, useState } from "react";
-import { Search, ChevronDown, ChevronRight, Star } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Star, FilePlus } from "lucide-react";
 import { catalogByCategory, CATALOG, type FilterDef } from "../../shared/lib/ffmpeg/catalog";
 import { CatalogItem } from "./CatalogItem";
 
 interface FilterCatalogProps {
   onAddFilter: (def: FilterDef) => void;
+  onAddInput: () => void; // добавить дополнительный вход (multi-input: overlay/concat)
   isFavorite: (id: string) => boolean;
   onToggleFavorite: (id: string) => void;
 }
 
 export function FilterCatalog({
   onAddFilter,
+  onAddInput,
   isFavorite,
   onToggleFavorite,
 }: FilterCatalogProps) {
@@ -65,6 +67,18 @@ export function FilterCatalog({
     <aside className="flex w-72 shrink-0 flex-col border-l border-border bg-surface">
       <div className="border-b border-border px-3 py-2 text-xs font-medium uppercase tracking-wide text-fg-muted">
         Каталог функций
+      </div>
+
+      {/* Добавить вход — для наложения (overlay) и склейки (concat): нужен второй файл */}
+      <div className="border-b border-border p-2">
+        <button
+          type="button"
+          onClick={onAddInput}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-node-input/60 px-2.5 py-1.5 text-sm text-fg hover:bg-node-input/10"
+        >
+          <FilePlus className="h-4 w-4 text-node-input" aria-hidden />
+          Добавить вход
+        </button>
       </div>
 
       {/* Поиск */}

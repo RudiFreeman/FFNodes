@@ -3,6 +3,9 @@
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
 import { orderedFilters } from "./chain";
+import { isLinearGraph } from "./dag";
+import { buildComplexPlan } from "./complex/build";
+import { isComplexError } from "./complex/types";
 import { validateGraph } from "./validate";
 
 export interface GeneratedCommand {
@@ -25,7 +28,13 @@ function fileName(path: string): string {
 // Порядок цепочки фильтров (input→output) — общая логика в chain.ts.
 
 // inputPath — реальный путь выбранного файла; если не задан, используется плейсхолдер.
+// Линейный граф идёт простым -vf/-af путём (как раньше); DAG (merge-операции, несколько
+// входов, ветвление) — через -filter_complex. Граница — isLinearGraph (см. dag.ts).
 export function generateCommand(graph: Graph, inputPath?: string): GeneratedCommand {
+  if (!isLinearGraph(graph)) {
+    return generateComplexCommand(graph, inputPath);
+  }
+
   const ordered = orderedFilters(graph);
 
   if (ordered === null) {
@@ -82,4 +91,48 @@ export function generateCommand(graph: Graph, inputPath?: string): GeneratedComm
   parts.push(PLACEHOLDER_OUTPUT);
 
   return { args, display: parts.join(" ") };
+}
+
+// Сборка команды через -filter_complex для DAG-графа (merge-операции, несколько входов).
+// Карта входов: каждой input-ноде сопоставляется путь. Пока единственный inputPath раздаётся
+// первому входу; полная привязка путей к нодам появится с multi-input UI (Фаза 3).
+function generateComplexCommand(graph: Graph, inputPath?: string): GeneratedCommand {
+  const inputNodes = graph.nodes.filter((n) => n.kind === "input");
+  const inputPaths = new Map<string, string>();
+  inputNodes.forEach((n, i) => {
+    // путь ноды берётся из её params (Фаза 3); fallback — переданный inputPath для первого
+    const fromParams = typeof n.params.path === "string" ? n.params.path : undefined;
+    inputPaths.set(n.id, fromParams ?? (i === 0 ? inputPath ?? PLACEHOLDER_INPUT : PLACEHOLDER_INPUT));
+  });
+
+  const plan = buildComplexPlan(graph, inputPaths);
+  if (isComplexError(plan)) {
+    return { args: [], display: "", error: plan.error, invalidNodeIds: plan.invalidNodeIds };
+  }
+
+  // args: каждый вход -i; затем -filter_complex; -map видео (+аудио); outputArgs; выход.
+  const args: string[] = [];
+  for (const p of plan.inputs) args.push("-i", p);
+  if (plan.filterComplex) args.push("-filter_complex", plan.filterComplex);
+  if (plan.mapVideo) args.push("-map", refLabel(plan.mapVideo));
+  if (plan.mapAudio) args.push("-map", refLabel(plan.mapAudio));
+  args.push(...plan.outputArgs);
+  args.push(PLACEHOLDER_OUTPUT);
+
+  // display — читаемый вид: короткие имена входов, filter_complex в кавычках
+  const parts = ["ffmpeg"];
+  for (const p of plan.inputs) parts.push("-i", fileName(p));
+  if (plan.filterComplex) parts.push("-filter_complex", `"${plan.filterComplex}"`);
+  if (plan.mapVideo) parts.push("-map", refLabel(plan.mapVideo));
+  if (plan.mapAudio) parts.push("-map", refLabel(plan.mapAudio));
+  parts.push(...plan.outputArgs);
+  parts.push(PLACEHOLDER_OUTPUT);
+
+  return { args, display: parts.join(" ") };
+}
+
+// Ссылка на поток в -map: промежуточные лейблы в скобках ([vout]), входные — как есть (0:v).
+// Промежуточный лейбл (от аллокатора) не содержит двоеточия; входной — содержит ("N:v").
+function refLabel(label: string): string {
+  return label.includes(":") ? label : `[${label}]`;
 }

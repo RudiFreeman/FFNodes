@@ -16,6 +16,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { FilterNode } from "./nodes/FilterNode";
+import { MergeNode } from "./nodes/MergeNode";
 import { InputNode } from "./nodes/InputNode";
 import { OutputNode } from "./nodes/OutputNode";
 
@@ -38,7 +39,12 @@ export function NodeCanvas({
 }: NodeCanvasProps) {
   // Регистрация кастомных типов нод (мемо — чтобы не пересоздавать каждый рендер)
   const nodeTypes = useMemo(
-    () => ({ filter: FilterNode, "input-file": InputNode, "output-file": OutputNode }),
+    () => ({
+      filter: FilterNode,
+      merge: MergeNode,
+      "input-file": InputNode,
+      "output-file": OutputNode,
+    }),
     [],
   );
 

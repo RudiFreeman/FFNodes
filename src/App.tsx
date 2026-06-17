@@ -21,8 +21,13 @@ function App() {
   const graph = useGraph(input.path, input.info);
   const render = useRender(graph.command, input.info);
   const favorites = useFavorites();
-  // Кадры превью «До»/«После» из исходника и vf-цепочки графа
-  const frame = usePreviewFrame(input.path, graph.graph, input.info?.duration ?? null);
+  // Кадры превью «До»/«После» из исходника и графа (линейный → -vf, DAG → filter_complex)
+  const frame = usePreviewFrame(
+    input.path,
+    graph.graph,
+    input.info?.duration ?? null,
+    graph.inputPaths,
+  );
 
   // Рендерить можно, если граф собран в команду и выбран входной файл
   const canRender = !graph.command.error && Boolean(input.path);
@@ -66,6 +71,7 @@ function App() {
         />
         <FilterCatalog
           onAddFilter={graph.addFilterNode}
+          onAddInput={graph.addInputNode}
           isFavorite={favorites.isFavorite}
           onToggleFavorite={favorites.toggleFavorite}
         />
