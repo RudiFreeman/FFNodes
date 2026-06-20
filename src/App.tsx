@@ -10,6 +10,7 @@ import { FilterCatalog } from "./widgets/FilterCatalog/FilterCatalog";
 import { CommandBar } from "./widgets/CommandBar/CommandBar";
 import { useGraph } from "./features/add-node/useGraph";
 import { useInputFile } from "./features/input-file/useInputFile";
+import { useFileDrop } from "./features/input-file/useFileDrop";
 import { useRender } from "./features/run-render/useRender";
 import { useFavorites } from "./features/favorites/useFavorites";
 import { usePreviewFrame } from "./features/preview-frame/usePreviewFrame";
@@ -18,6 +19,8 @@ import "./App.css";
 
 function App() {
   const input = useInputFile();
+  // Перетаскивание файла в окно → грузим в основной вход (как выбор через диалог)
+  const drop = useFileDrop(input.acceptDroppedPath);
   const graph = useGraph(input.path, input.info);
   const render = useRender(graph.command, input.info);
   const favorites = useFavorites();
@@ -59,6 +62,7 @@ function App() {
           outputInfo={afterInfo}
           rendered={render.outputInfo != null}
           frame={frame}
+          dragging={drop.dragging}
           onChoose={input.choose}
         />
         <NodeCanvas

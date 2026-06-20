@@ -25,8 +25,9 @@
 | Пресеты «Изменить размер» `scale`: toCommand (короткая сторона/половина/свои/дефолт), applyToInfo на гориз/вертик (не раздувает), свои с авто-высотой, без размеров входа | `src/shared/lib/ffmpeg/catalog/resize.test.ts` | 11 |
 | Валидация `validateGraph` (N-007): -vn+видеофильтр, -vn+compress, -vn+-an (пустой файл), -an+громкость (needsAudio), громкость+видеофильтр (ок), валидная цепочка, только -an, только -vn, разрыв→молчит, пустая цепочка; дубль выходного флага (N-014): compress+codec оба -c:v, одна -c:v ок, разные флаги (-c:v+-f) не дубль; merge без второго входа (overlay 1 вход→ошибка, 2 входа→ок, GIF single-input→ок) | `src/shared/lib/ffmpeg/validate.test.ts` | 16 |
 | Защита пути `safePath` (N-004): ведущий `-` → префикс ./; абсолютные/обычные/пустой не трогаем | `src/shared/lib/ffmpeg/safePath.test.ts` | 2 |
+| Отсев не-видео при drag&drop `isSupportedVideo`: все поддерживаемые расширения, регистронезависимость, не-видео/без расширения, точки в пути | `src/shared/lib/videoExtensions.test.ts` | 4 |
 
-**Фронт (Vitest): 188 ✅**
+**Фронт (Vitest): 192 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
@@ -54,3 +55,6 @@
   различение отмены и сбоя ffmpeg в catch) — компонентные тесты (нужен @testing-library + мок API).
 - Хук `usePreviewFrame` (дебаунс «После», токены актуальности против гонок, «После»=«До»
   без фильтров) — компонентные тесты (нужен @testing-library + фейк extractFrame).
+- Хук `useFileDrop` (Tauri drag&drop: enter/over→dragging, drop→onDrop(paths[0]), отписка) и
+  `acceptDroppedPath` (safePath применён, не-видео не затирает выбранный файл) — компонентные/
+  хук-тесты (нужен @testing-library + мок Tauri webview). Пока проверены вживую.

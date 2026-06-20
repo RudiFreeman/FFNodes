@@ -3,6 +3,7 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { safePath } from "../lib/ffmpeg/safePath";
+import { VIDEO_EXTENSIONS } from "../lib/videoExtensions";
 import type { MediaInfo } from "../types/media";
 
 // MediaInfo живёт в shared/types/media.ts (доменный тип). Реэкспорт — чтобы существующие
@@ -17,7 +18,7 @@ export async function pickInputFile(): Promise<string | null> {
     filters: [
       {
         name: "Видео",
-        extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v", "flv", "wmv"],
+        extensions: [...VIDEO_EXTENSIONS],
       },
     ],
   });

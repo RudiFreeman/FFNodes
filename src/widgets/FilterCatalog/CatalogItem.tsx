@@ -17,10 +17,12 @@ export function CatalogItem({ def, isFavorite, onAdd, onToggleFavorite }: Catalo
         type="button"
         title={def.description}
         onClick={() => onAdd(def)}
-        className="min-w-0 flex-1 rounded-md px-2 py-1.5 text-left focus:outline-none focus:ring-2 focus:ring-ring"
+        className="min-w-0 flex-1 rounded-md py-1 pl-6 pr-2 text-left focus:outline-none focus:ring-2 focus:ring-ring"
       >
-        <span className="block text-sm text-fg">{def.label}</span>
-        <span className="mt-0.5 block truncate text-xs text-fg-muted">
+        {/* Название пункта легче заголовка группы (13px) — подпункт не перевешивает раздел.
+            Крупный отступ слева (pl-6) даёт чёткую «лесенку» вложенности под заголовком группы. */}
+        <span className="block text-[13px] leading-snug text-fg">{def.label}</span>
+        <span className="block truncate text-[11px] leading-snug text-fg-muted">
           {def.description}
         </span>
       </button>
@@ -29,7 +31,7 @@ export function CatalogItem({ def, isFavorite, onAdd, onToggleFavorite }: Catalo
         onClick={() => onToggleFavorite(def.id)}
         aria-label={isFavorite ? "Убрать из избранного" : "В избранное"}
         aria-pressed={isFavorite}
-        className="mt-1.5 mr-1 shrink-0 rounded p-0.5 focus:outline-none focus:ring-2 focus:ring-ring"
+        className="mt-1 mr-1 shrink-0 rounded p-0.5 focus:outline-none focus:ring-2 focus:ring-ring"
       >
         <Star
           className={

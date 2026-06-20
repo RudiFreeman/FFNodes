@@ -4,6 +4,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { MediaInfo } from "../../../shared/types/media";
 import { MediaSummary } from "../../../shared/ui/MediaSummary";
+import { HANDLE_CLASS } from "../../../shared/ui/handleClass";
 
 export interface OutputNodeData {
   info: MediaInfo | null;
@@ -14,7 +15,7 @@ export function OutputNode({ data }: NodeProps) {
   const d = data as OutputNodeData;
   return (
     <div className="min-w-[140px] rounded-md border-2 border-node-output bg-surface px-3 py-2 shadow-md">
-      <Handle type="target" position={Position.Left} className="!bg-node-output" />
+      <Handle type="target" position={Position.Left} className={`!bg-node-output ${HANDLE_CLASS}`} />
       <div className="text-xs font-medium uppercase tracking-wide text-node-output">
         Выход
       </div>

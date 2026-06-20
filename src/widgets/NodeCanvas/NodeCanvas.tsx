@@ -63,6 +63,15 @@ export function NodeCanvas({
         // minZoom чуть ниже дефолта — можно отдалиться сильнее.
         fitViewOptions={{ maxZoom: 0.75, padding: 0.3 }}
         minZoom={0.3}
+        // Навигация: панорама на ПРАВУЮ кнопку мыши (код 2), ЛКМ освобождена под выделение/
+        // таскание нод и протяжку связей. selectionOnDrag — ЛКМ по пустому холсту = рамка
+        // выделения. panOnScroll — панорама колесом/трекпадом (удобно без перетаскивания).
+        panOnDrag={[2]}
+        selectionOnDrag
+        panOnScroll
+        // Гасим нативное контекстное меню, чтобы ПКМ-панорама не открывала его поверх холста.
+        onPaneContextMenu={(e) => e.preventDefault()}
+        onNodeContextMenu={(e) => e.preventDefault()}
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#475569" gap={20} />
