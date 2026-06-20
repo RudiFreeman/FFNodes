@@ -24,6 +24,7 @@ interface PreviewPanelProps {
   outputInfo: MediaInfo | null; // характеристики «После»: предсказание или результат рендера
   rendered: boolean; // true — outputInfo это реальный результат рендера (размер точный, не «≈»)
   frame: PreviewFrameState; // кадры «До»/«После» (usePreviewFrame)
+  dragging: boolean; // над окном тащат файл — показать оверлей «отпусти здесь»
   onChoose: () => void;
 }
 
@@ -92,21 +93,23 @@ export function PreviewPanel({
   outputInfo,
   rendered,
   frame,
+  dragging,
   onChoose,
 }: PreviewPanelProps) {
   // «После» отличается от «До» только когда кадр после реально получен и не равен «До»
   const hasAfter = frame.after !== null && frame.after !== frame.before;
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-surface">
+    <aside className="relative flex w-80 shrink-0 flex-col border-r border-border bg-surface">
       <div className="border-b border-border px-3 py-2 text-xs font-medium uppercase tracking-wide text-fg-muted">
         Превью
       </div>
 
       {!path ? (
-        // Пустое состояние — приглашение выбрать файл
+        // Пустое состояние — приглашение выбрать файл (плюс ошибка, напр. перетащили не-видео)
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
           <FileVideo className="h-10 w-10 text-fg-muted" aria-hidden />
           <p className="text-sm text-fg-muted">Выбери видео, чтобы начать</p>
+          {error && <p className="text-xs text-destructive">{error}</p>}
           <button
             type="button"
             onClick={onChoose}
@@ -219,6 +222,15 @@ export function PreviewPanel({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Оверлей при перетаскивании файла над окном. pointer-events-none — чтобы не перехватывать
+          нативное drop-событие Tauri (оно ловится на уровне webview, не через DOM). */}
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-accent bg-bg/80 text-center">
+          <FileVideo className="h-10 w-10 text-accent" aria-hidden />
+          <p className="text-sm font-medium text-accent">Отпусти файл здесь</p>
         </div>
       )}
     </aside>
