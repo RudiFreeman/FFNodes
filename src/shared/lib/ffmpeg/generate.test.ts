@@ -198,6 +198,64 @@ describe("generateCommand — filter_complex путь (DAG)", () => {
   });
 });
 
+describe("generateCommand — мульти-аутпут (Спринт 3, Вариант A)", () => {
+  it("один вход → два выхода: split + две секции -map/outputArgs/файл", () => {
+    // in → c1(compress 18) → out1; in → c2(compress 28) → out2
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("c1", "filter", "compress", { crf: 18 }),
+        node("c2", "filter", "compress", { crf: 28 }),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "c1"), edge("in", "c2"), edge("c1", "out1"), edge("c2", "out2")],
+    };
+    const r = generateCommand(graph, "/clip.mp4");
+    expect(r.error).toBeUndefined();
+    expect(r.outputPlaceholders).toEqual(["output_0.mp4", "output_1.mp4"]);
+    expect(r.args).toEqual([
+      "-i",
+      "/clip.mp4",
+      "-filter_complex",
+      "[0:v]split=2[v1][v2];[0:a]asplit=2[a1][a2]",
+      "-map",
+      "[v1]",
+      "-map",
+      "[a1]",
+      "-c:v",
+      "libx264",
+      "-crf",
+      "18",
+      "output_0.mp4",
+      "-map",
+      "[v2]",
+      "-map",
+      "[a2]",
+      "-c:v",
+      "libx264",
+      "-crf",
+      "28",
+      "output_1.mp4",
+    ]);
+  });
+
+  it("display показывает короткое имя входа и обе выходные секции", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "out1"), edge("in", "out2")],
+    };
+    const r = generateCommand(graph, "/path/to/clip.mp4");
+    expect(r.display).toContain("-i clip.mp4");
+    expect(r.display).toContain("output_0.mp4");
+    expect(r.display).toContain("output_1.mp4");
+  });
+});
+
 describe("generateCommand — неполный граф → ошибка, не падение", () => {
   it("нет output", () => {
     const graph: Graph = {
@@ -236,21 +294,17 @@ describe("generateCommand — неполный граф → ошибка, не �
     expect(generateCommand({ nodes: [], edges: [] }).error).toBeTruthy();
   });
 
-  // Мульти-аутпут (Спринт 3, пункт 1): несколько выходов пока даёт понятную подсказку,
-  // а не неверную команду по одному выходу. Генерация подключается в пункте 2.
-  it("несколько выходов → подсказка «в разработке», не команда", () => {
+  // Висящий доп. выход без подведённой ветки → ошибка целостности (topoSort null), не падение.
+  it("мульти-аутпут: висящий доп. выход без ветки → ошибка", () => {
     const graph: Graph = {
       nodes: [
         node("in", "input"),
         node("a", "filter", "scale", { preset: "Свои размеры", width: 1, height: 1 }),
-        node("b", "filter", "scale", { preset: "Свои размеры", width: 2, height: 2 }),
         node("out1", "output"),
-        node("out2", "output"),
+        node("out2", "output"), // не подключён
       ],
-      edges: [edge("in", "a"), edge("in", "b"), edge("a", "out1"), edge("b", "out2")],
+      edges: [edge("in", "a"), edge("a", "out1")],
     };
-    const cmd = generateCommand(graph);
-    expect(cmd.error).toBeTruthy();
-    expect(cmd.args).toHaveLength(0);
+    expect(generateCommand(graph).error).toBeTruthy();
   });
 });

@@ -2,7 +2,7 @@
 // покрываем плотно. Merge-операции (overlay/concat/gif) появляются в каталоге позже
 // (Фазы 4-5) — их end-to-end проверки там; здесь — оборачивание лейблов и топология.
 import { describe, it, expect } from "vitest";
-import { buildComplexPlan } from "./build";
+import { buildComplexPlan, buildMultiOutputPlan } from "./build";
 import { isComplexError } from "./types";
 import type { Graph, GraphNode, GraphEdge, ParamValue } from "../../../types/graph";
 
@@ -180,6 +180,103 @@ describe("buildComplexPlan — merge-операции (overlay/concat)", () => {
     // scale оборачивает 0:v в v1, overlay берёт v1 (основной, по in-main) и 1:v (накладка)
     expect(r.filterComplex).toBe("[0:v]scale=1280:-2[v1];[v1][1:v]overlay=0:0[v2]");
     expect(r.mapVideo).toBe("v2");
+  });
+});
+
+describe("buildMultiOutputPlan — мульти-аутпут (1 вход → N выходов)", () => {
+  it("один вход → два выхода через split: 2 ветки scale, по выходу на каждую", () => {
+    // in → a(scale 1920) → out1; in → b(scale 1280) → out2 — вход ветвится на 2 выхода
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("a", "filter", "scale", { preset: "Свои размеры", width: 1920, height: -2 }),
+        node("b", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 }),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "a"), edge("in", "b"), edge("a", "out1"), edge("b", "out2")],
+    };
+    const r = buildMultiOutputPlan(graph, new Map([["in", "input.mp4"]]));
+    if (isComplexError(r)) throw new Error(r.error);
+    expect(r.inputs).toEqual(["input.mp4"]);
+    // 0:v и 0:a читаются дважды (две ветки) → split=2/asplit=2; затем каждая ветка scale
+    expect(r.filterComplex).toBe(
+      "[0:v]split=2[v1][v2];[0:a]asplit=2[a1][a2];[v1]scale=1920:-2[v3];[v2]scale=1280:-2[v4]",
+    );
+    expect(r.outputs).toHaveLength(2);
+    expect(r.outputs[0]).toMatchObject({ nodeId: "out1", mapVideo: "v3", mapAudio: "a1" });
+    expect(r.outputs[1]).toMatchObject({ nodeId: "out2", mapVideo: "v4", mapAudio: "a2" });
+  });
+
+  it("разные кодеки по выходам: outputArgs ветки идут к своему выходу", () => {
+    // in → c1(compress crf18) → out1; in → c2(compress crf28) → out2
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("c1", "filter", "compress", { crf: 18 }),
+        node("c2", "filter", "compress", { crf: 28 }),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "c1"), edge("in", "c2"), edge("c1", "out1"), edge("c2", "out2")],
+    };
+    const r = buildMultiOutputPlan(graph, new Map([["in", "input.mp4"]]));
+    if (isComplexError(r)) throw new Error(r.error);
+    // compress без vf → ветки только из split (поток проходит насквозь к выходу)
+    expect(r.outputs[0].outputArgs).toEqual(["-c:v", "libx264", "-crf", "18"]);
+    expect(r.outputs[1].outputArgs).toEqual(["-c:v", "libx264", "-crf", "28"]);
+    // split=2/asplit=2 нужны: 0:v и 0:a читаются двумя выходами (compress без vf — насквозь)
+    expect(r.filterComplex).toBe("[0:v]split=2[v1][v2];[0:a]asplit=2[a1][a2]");
+    expect(r.outputs[0]).toMatchObject({ mapVideo: "v1", mapAudio: "a1" });
+    expect(r.outputs[1]).toMatchObject({ mapVideo: "v2", mapAudio: "a2" });
+  });
+
+  it("три выхода: split=3", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("out1", "output"),
+        node("out2", "output"),
+        node("out3", "output"),
+      ],
+      edges: [edge("in", "out1"), edge("in", "out2"), edge("in", "out3")],
+    };
+    const r = buildMultiOutputPlan(graph, new Map([["in", "input.mp4"]]));
+    if (isComplexError(r)) throw new Error(r.error);
+    // видео и аудио размножаются split=3/asplit=3 (все три выхода мапят 0:v и 0:a)
+    expect(r.filterComplex).toBe("[0:v]split=3[v1][v2][v3];[0:a]asplit=3[a1][a2][a3]");
+    expect(r.outputs.map((o) => o.mapVideo)).toEqual(["v1", "v2", "v3"]);
+    expect(r.outputs.map((o) => o.mapAudio)).toEqual(["a1", "a2", "a3"]);
+  });
+
+  it("общий фильтр до развилки: scale один раз, потом split на 2 выхода", () => {
+    // in → s(scale) → split → out1, out2 (общий шаг до развилки)
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("s", "filter", "scale", { preset: "Свои размеры", width: 1280, height: -2 }),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "s"), edge("s", "out1"), edge("s", "out2")],
+    };
+    const r = buildMultiOutputPlan(graph, new Map([["in", "input.mp4"]]));
+    if (isComplexError(r)) throw new Error(r.error);
+    // scale применяется один раз (v1, общий шаг), затем split на два выхода; аудио asplit
+    expect(r.filterComplex).toBe(
+      "[0:v]scale=1280:-2[v1];[v1]split=2[v2][v3];[0:a]asplit=2[a1][a2]",
+    );
+    expect(r.outputs.map((o) => o.mapVideo)).toEqual(["v2", "v3"]);
+    expect(r.outputs.map((o) => o.mapAudio)).toEqual(["a1", "a2"]);
+  });
+
+  it("вход без файла → ошибка", () => {
+    const graph: Graph = {
+      nodes: [node("in", "input"), node("out1", "output"), node("out2", "output")],
+      edges: [edge("in", "out1"), edge("in", "out2")],
+    };
+    const r = buildMultiOutputPlan(graph, new Map());
+    expect(isComplexError(r)).toBe(true);
   });
 });
 
