@@ -242,3 +242,43 @@ describe("predictOutput", () => {
     expect(input).toEqual(snapshot);
   });
 });
+
+describe("predictOutput — мульти-аутпут (предсказание по выбранному выходу)", () => {
+  // Один вход → две разные ветки к двум выходам: trim (короче) и scale (меньше разрешение)
+  const multi: Graph = {
+    nodes: [
+      node("in", "input"),
+      node("t", "filter", "trim", { start: 0, end: 10 }),
+      node("s", "filter", "scale", { preset: "Свои размеры", width: 640, height: -2 }),
+      node("out1", "output"),
+      node("out2", "output"),
+    ],
+    edges: [edge("in", "t"), edge("in", "s"), edge("t", "out1"), edge("s", "out2")],
+  };
+
+  it("выход trim-ветки: длительность 10с, размер меньше (предсказание ИМЕННО его ветки)", () => {
+    const r = predictOutput(multi, input, undefined, "out1");
+    expect(r?.duration).toBe(10); // trim 0–10
+    expect(r?.width).toBe(1920); // разрешение не трогали
+    // размер пропорционален длительности → сильно меньше исходных 50МБ
+    expect(r!.size_bytes!).toBeLessThan(input.size_bytes!);
+  });
+
+  it("выход scale-ветки: разрешение 640×360, длительность исходная (его ветка)", () => {
+    const r = predictOutput(multi, input, undefined, "out2");
+    expect(r?.width).toBe(640);
+    expect(r?.height).toBe(360);
+    expect(r?.duration).toBe(60); // scale не трогает длительность
+  });
+
+  it("разные выходы дают РАЗНЫЕ характеристики (не одинаковые, как было до пункта 4)", () => {
+    const a = predictOutput(multi, input, undefined, "out1");
+    const b = predictOutput(multi, input, undefined, "out2");
+    expect(a?.duration).not.toBe(b?.duration);
+    expect(a?.width).not.toBe(b?.width);
+  });
+
+  it("несуществующий outputNodeId → null", () => {
+    expect(predictOutput(multi, input, undefined, "no-such")).toBeNull();
+  });
+});

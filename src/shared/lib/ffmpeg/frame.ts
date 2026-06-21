@@ -5,8 +5,8 @@
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
 import { orderedFilters } from "./chain";
-import { isLinearGraph, topoSort } from "./dag";
-import { buildComplexPlan } from "./complex/build";
+import { isLinearGraph, topoSort, outputNodes } from "./dag";
+import { buildComplexPlan, buildMultiOutputPlan } from "./complex/build";
 import { isComplexError } from "./complex/types";
 
 // Собрать строку -vf из графа: фрагменты фильтров через запятую (порядок цепочки).
@@ -48,12 +48,32 @@ export type PreviewPlan =
   | null;
 
 // Решить, как строить кадр «После». inputPaths — пути входных нод (id → path) для DAG.
-export function previewPlan(graph: Graph, inputPaths: Map<string, string>): PreviewPlan {
+// outputNodeId — для какого выхода кадр (мульти-аутпут: у выходов разные ветки); не задан —
+// первый выход (обратная совместимость с одиночным выходом).
+export function previewPlan(
+  graph: Graph,
+  inputPaths: Map<string, string>,
+  outputNodeId?: string,
+): PreviewPlan {
+  // Мульти-аутпут: кадр «После» выбранного выхода — его ветка filter_complex + его mapVideo.
+  if (outputNodes(graph).length > 1) {
+    const plan = buildMultiOutputPlan(graph, inputPaths);
+    if (isComplexError(plan)) return null;
+    const target = outputNodeId
+      ? plan.outputs.find((o) => o.nodeId === outputNodeId)
+      : plan.outputs[0];
+    if (!target) return null;
+    return {
+      kind: "complex",
+      spec: { inputs: plan.inputs, filterComplex: plan.filterComplex, mapVideo: target.mapVideo },
+    };
+  }
+
   if (isLinearGraph(graph)) {
     const vf = videoFilterChain(graph);
     return vf === null ? null : { kind: "vf", vf };
   }
-  // DAG: строим план filter_complex (тот же, что для рендера, но без outputArgs-кодеков)
+  // DAG (одиночный выход): план filter_complex (тот же, что для рендера, без outputArgs-кодеков)
   const plan = buildComplexPlan(graph, inputPaths);
   if (isComplexError(plan)) return null;
   return {

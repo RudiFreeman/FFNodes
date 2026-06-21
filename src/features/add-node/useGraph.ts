@@ -286,38 +286,53 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     return map;
   }, [nodes, inputPath]);
 
-  // Предсказанные характеристики результата — пересчитываются на лету из графа и входов
+  // Предсказание ПО КАЖДОМУ выходу (мульти-аутпут: у выходов разные ветки → разные
+  // характеристики). Ключ — id output-ноды. predictOutput считает по ветке этого выхода.
+  const predictedByOutput = useMemo(() => {
+    const map = new Map<string, MediaInfo | null>();
+    for (const n of nodes) {
+      if (n.type !== "output-file") continue;
+      map.set(n.id, predictOutput(graph, info ?? null, inputInfos, n.id));
+    }
+    return map;
+  }, [nodes, graph, info, inputInfos]);
+
+  // Предсказание основного/первого выхода — для панели «До/После» (обратная совместимость).
   const predictedOutput = useMemo(
-    () => predictOutput(graph, info ?? null, inputInfos),
-    [graph, info, inputInfos],
+    () => predictedByOutput.get(OUTPUT_ID) ?? predictOutput(graph, info ?? null, inputInfos),
+    [predictedByOutput, graph, info, inputInfos],
   );
 
-  // Синхронизировать характеристики в data стартовых нод (вход — info, выход — предсказание),
-  // чтобы InputNode/OutputNode их отрисовали. По аналогии с onParamChange (пишем в data).
-  // ВАЖНО — защита от зацикливания: setNodes → новый `nodes` → новый useMemo `graph` →
-  //   `predictOutput` отдаёт НОВЫЙ объект с тем же содержимым → эффект снова → setNodes…
-  //   («Maximum update depth exceeded»). Поэтому сравниваем по СОДЕРЖИМОМУ (а не по ссылке):
-  //   если info и предсказание не изменились фактически — возвращаем prev и цикл рвётся.
+  // Синхронизировать характеристики в data нод (вход — info, КАЖДЫЙ выход — предсказание
+  // своей ветки), чтобы InputNode/OutputNode их отрисовали. По аналогии с onParamChange.
+  // ВАЖНО — защита от зацикливания (N-013): setNodes → новый `nodes` → новый `graph` →
+  //   predictOutput отдаёт НОВЫЙ объект с тем же содержимым → эффект снова → setNodes…
+  //   («Maximum update depth exceeded»). Поэтому сравниваем по СОДЕРЖИМОМУ: если ничего
+  //   фактически не изменилось — возвращаем prev и цикл рвётся.
   useEffect(() => {
     setNodes((prev) => {
-      // Только ОСНОВНОЙ вход (INPUT_ID) синхронизируем с info из топбара — у дополнительных
-      // входов свой info (из их собственного ffprobe в chooseInputFile), его не трогаем.
-      const input = prev.find((n) => n.id === INPUT_ID);
-      const output = prev.find((n) => n.type === "output-file");
       const nextInfo = info ?? null;
       const sameContent = (a: unknown, b: unknown) =>
         a === b || JSON.stringify(a) === JSON.stringify(b);
-      const inputSame = sameContent((input?.data as { info?: unknown })?.info, nextInfo);
-      const outputSame = sameContent((output?.data as { info?: unknown })?.info, predictedOutput);
-      // Фактически ничего не изменилось — не создаём новый массив нод (разрывает цикл)
-      if (inputSame && outputSame) return prev;
-      return prev.map((n) => {
-        if (n.id === INPUT_ID) return { ...n, data: { ...n.data, info: nextInfo } };
-        if (n.type === "output-file") return { ...n, data: { ...n.data, info: predictedOutput } };
+      // Считаем, изменилось ли хоть что-то (вход INPUT_ID или любой выход по своей ветке)
+      let changed = false;
+      const next = prev.map((n) => {
+        if (n.id === INPUT_ID) {
+          if (sameContent((n.data as { info?: unknown }).info, nextInfo)) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, info: nextInfo } };
+        }
+        if (n.type === "output-file") {
+          const pred = predictedByOutput.get(n.id) ?? null;
+          if (sameContent((n.data as { info?: unknown }).info, pred)) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, info: pred } };
+        }
         return n;
       });
+      return changed ? next : prev; // ничего не изменилось — рвём цикл
     });
-  }, [info, predictedOutput, setNodes]);
+  }, [info, predictedByOutput, setNodes]);
 
   return {
     nodes,
@@ -332,6 +347,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     addOutputNode,
     command,
     predictedOutput,
+    predictedByOutput, // предсказание по каждому выходу (мульти-аутпут: переключатель в панели)
     inputPaths, // пути входов (id → path) — для превью-кадра DAG (usePreviewFrame)
   };
 }

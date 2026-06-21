@@ -1,6 +1,7 @@
 // Корневой компонент: компонует раскладку FFmpeg Visual из зон и связывает
 // каталог с холстом, файл с превью, кнопку рендера с FFmpeg.
 // Раскладка по docs/UI.md §4. Архитектура графа — docs/ARCHITECTURE.md.
+import { useMemo, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { TopBar } from "./widgets/TopBar/TopBar";
 import { ProgressBar } from "./widgets/ProgressBar/ProgressBar";
@@ -24,20 +25,40 @@ function App() {
   const graph = useGraph(input.path, input.info);
   const render = useRender(graph.command, input.info);
   const favorites = useFavorites();
-  // Кадры превью «До»/«После» из исходника и графа (линейный → -vf, DAG → filter_complex)
+
+  // Выходные ноды графа в порядке (мульти-аутпут: вкладки «После»). Подпись «Выход N».
+  const outputs = useMemo(() => {
+    const ids = graph.graph.nodes.filter((n) => n.kind === "output").map((n) => n.id);
+    return ids.map((id, i) => ({ id, label: ids.length > 1 ? `Выход ${i + 1}` : "Выход" }));
+  }, [graph.graph.nodes]);
+
+  // Выбранный выход для колонки «После» (по умолчанию первый; если исчез — откатываемся).
+  const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
+  const activeOutputId =
+    selectedOutputId && outputs.some((o) => o.id === selectedOutputId)
+      ? selectedOutputId
+      : outputs[0]?.id ?? null;
+
+  // Кадры превью «До»/«После» из исходника и графа (линейный → -vf, DAG → filter_complex);
+  // «После» — для выбранного выхода (мульти-аутпут).
   const frame = usePreviewFrame(
     input.path,
     graph.graph,
     input.info?.duration ?? null,
     graph.inputPaths,
+    activeOutputId ?? undefined,
   );
 
   // Рендерить можно, если граф собран в команду и выбран входной файл
   const canRender = !graph.command.error && Boolean(input.path);
 
-  // Колонка «После» в панели: реальные метаданные после рендера (точные, вкл. размер файла),
-  // а пока не отрендерили — живое предсказание из графа.
-  const afterInfo = render.outputInfo ?? graph.predictedOutput;
+  // Колонка «После» в панели для ВЫБРАННОГО выхода: реальные метаданные после рендера
+  // (по индексу выхода), а пока не отрендерили — живое предсказание ветки этого выхода.
+  const activeIndex = outputs.findIndex((o) => o.id === activeOutputId);
+  const renderedInfo =
+    activeIndex >= 0 ? render.outputInfos[activeIndex] ?? null : render.outputInfo;
+  const afterInfo =
+    renderedInfo ?? (activeOutputId ? graph.predictedByOutput.get(activeOutputId) ?? null : graph.predictedOutput);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-bg text-fg">
@@ -60,10 +81,13 @@ function App() {
           loading={input.loading}
           error={input.error}
           outputInfo={afterInfo}
-          rendered={render.outputInfo != null}
+          rendered={renderedInfo != null}
           frame={frame}
           dragging={drop.dragging}
           onChoose={input.choose}
+          outputs={outputs}
+          selectedOutputId={activeOutputId}
+          onSelectOutput={setSelectedOutputId}
         />
         <NodeCanvas
           nodes={graph.nodes}
