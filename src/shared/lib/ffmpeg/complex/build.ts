@@ -230,8 +230,11 @@ export function buildMultiOutputPlan(
     }
 
     // Входные потоки ноды — берём ВЕТКИ предшественников (split, если те ветвятся),
-    // упорядоченные по targetHandle (для merge важен порядок основной/накладка).
-    const incoming = orderedIncomingBranches(graph, node.id, takeBranch);
+    // упорядоченные по targetHandle (для merge важен порядок основной/накладка). Аудио
+    // НЕ запрашиваем у merge без audioInputs (overlay) — иначе вытянули бы ветку asplit,
+    // которую этот узел не использует (должно совпадать с countUses, см. consumesNoAudio).
+    const wantsAudio = !consumesNoAudio(node);
+    const incoming = orderedIncomingBranches(graph, node.id, takeBranch, wantsAudio);
     if (incoming === null) {
       return { error: `Не хватает входа для «${def.label}»`, invalidNodeIds: [node.id] };
     }
@@ -275,29 +278,49 @@ export function buildMultiOutputPlan(
 }
 
 // Посчитать, сколько раз поток (видео/аудио) каждой ноды читается ниже по графу.
-// Каждое исходящее ребро = один потребитель потоков ноды-источника (видео и аудио).
-// Выход потребляет и видео, и аудио источника; фильтр/merge — по своему входу (упрощённо
-// считаем потребление и видео, и аудио на ребро: лишний split в ветке без аудио безвреден,
-// т.к. takeBranch создаёт split только когда поток реально не null и читается >1 раза).
+// Считаем ПО ПОТРЕБИТЕЛЮ ребра, а не вслепую по числу рёбер: важно не насчитать лишнее
+// аудио-потребление там, где потребитель аудио НЕ берёт — иначе takeBranch создаст лишнюю
+// ветку asplit, которую никто не прочитает (ffmpeg: «output pad not connected»).
+//   • output (приёмник) — мапит и видео, и аудио источника → читает оба;
+//   • merge-операция — видео читает всегда; аудио ТОЛЬКО если merge.audioInputs задан
+//     (overlay аудио накладки не берёт → его asplit был бы орфаном);
+//   • обычный фильтр — аудио проходит насквозь (читается), видео тоже.
 function countUses(graph: Graph, ordered: GraphNode[]): Map<string, UseCount> {
   const counts = new Map<string, UseCount>();
   for (const n of ordered) counts.set(n.id, { v: 0, a: 0 });
+  const byId = new Map(ordered.map((n) => [n.id, n]));
   for (const n of ordered) {
     if (n.kind === "output") continue;
-    const outs = outgoingEdges(graph, n.id);
     const c = counts.get(n.id)!;
-    c.v += outs.length;
-    c.a += outs.length;
+    for (const e of outgoingEdges(graph, n.id)) {
+      const target = byId.get(e.target);
+      c.v += 1; // видео потребляют все потребители (output/фильтр/merge)
+      // Аудио НЕ потребляет merge-операция без audioInputs (overlay): её asplit стал бы орфаном
+      const dropsAudio = consumesNoAudio(target);
+      if (!dropsAudio) c.a += 1;
+    }
   }
   return counts;
 }
 
+// Потребитель НЕ берёт аудио источника? Так у merge без audioInputs (overlay): он строит
+// фрагмент только из видеовходов, аудио предшественника не использует. Прочие (output,
+// обычный фильтр, concat с audioInputs) аудио потребляют.
+function consumesNoAudio(node: GraphNode | undefined): boolean {
+  if (!node || node.kind !== "filter" || !node.filterId) return false;
+  const def = getFilterDef(node.filterId);
+  return def?.merge != null && !def.merge.audioInputs;
+}
+
 // Входные ветки ноды, упорядоченные по targetHandle (как orderedIncomingStreams, но берёт
 // split-ветку через takeBranch вместо общего лейбла). null — если предшественник не построен.
+// wantsAudio=false — узел аудио не потребляет (merge без audioInputs): ветку asplit не тянем
+// (иначе осталась бы неподключённой), a=null.
 function orderedIncomingBranches(
   graph: Graph,
   nodeId: string,
   takeBranch: (nodeId: string, kind: "v" | "a") => StreamLabel | null,
+  wantsAudio: boolean,
 ): NodeStreams[] | null {
   const incoming = incomingEdges(graph, nodeId);
   if (incoming.length === 0) return null;
@@ -306,7 +329,10 @@ function orderedIncomingBranches(
     const hb = b.targetHandle ?? "￿";
     return ha < hb ? -1 : ha > hb ? 1 : 0;
   });
-  return sorted.map((e) => ({ v: takeBranch(e.source, "v"), a: takeBranch(e.source, "a") }));
+  return sorted.map((e) => ({
+    v: takeBranch(e.source, "v"),
+    a: wantsAudio ? takeBranch(e.source, "a") : null,
+  }));
 }
 
 // Собрать outputArgs ветки, ведущей к данному выходу: поднимаемся по основным входящим

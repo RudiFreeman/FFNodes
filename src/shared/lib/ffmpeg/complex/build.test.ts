@@ -278,6 +278,42 @@ describe("buildMultiOutputPlan — мульти-аутпут (1 вход → N �
     const r = buildMultiOutputPlan(graph, new Map());
     expect(isComplexError(r)).toBe(true);
   });
+
+  it("overlay в одной ветке + прямой выход: аудио НЕ даёт орфан-asplit (регрессия ревью)", () => {
+    // in1 (аудио) → overlay[in-main]; in2 (логотип) → overlay[in-overlay]; overlay → out1;
+    // in1 → out2 напрямую. Аудио in1 потребляет ТОЛЬКО out2 (overlay аудио накладки не берёт).
+    // До фикжа: countUses(in1).a=2 → asplit=2[a1][a2], a1 уходил в overlay и оставался орфаном.
+    const graph: Graph = {
+      nodes: [
+        node("in1", "input"),
+        node("in2", "input"),
+        node("ov", "filter", "overlay", { x: 0, y: 0 }),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [
+        edge("in1", "ov", "in-main"),
+        edge("in2", "ov", "in-overlay"),
+        edge("ov", "out1"),
+        edge("in1", "out2"),
+      ],
+    };
+    const r = buildMultiOutputPlan(
+      graph,
+      new Map([
+        ["in1", "main.mp4"],
+        ["in2", "logo.png"],
+      ]),
+    );
+    if (isComplexError(r)) throw new Error(r.error);
+    // НЕТ asplit аудио (in1.a потребляет только out2) — иначе была бы неподключённая ветка
+    expect(r.filterComplex).not.toContain("asplit");
+    // out2 мапит аудио in1 напрямую (0:a), out1 (overlay) аудио не имеет
+    const out1 = r.outputs.find((o) => o.nodeId === "out1")!;
+    const out2 = r.outputs.find((o) => o.nodeId === "out2")!;
+    expect(out2.mapAudio).toBe("0:a");
+    expect(out1.mapAudio).toBeNull();
+  });
 });
 
 describe("buildComplexPlan — ошибки", () => {

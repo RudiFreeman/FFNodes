@@ -16,7 +16,7 @@
 | Генератор: цепочки по связям, порядок, разрыв, цикл, пустой граф, outputArgs, комбинация, путь, -af + -vf вместе; filter_complex путь (GIF-палитра, путь из params.path); мульти-аутпут (Спринт 3, Вариант A): 1 вход→2 выхода (split + две секции -map/outputArgs/файл, outputPlaceholders), display обеих секций, висящий выход→ошибка | `src/shared/lib/ffmpeg/generate.test.ts` | 19 |
 | Обход цепочки `orderedFilters`: порядок по связям, пустая цепочка, нет output, разрыв, цикл | `src/shared/lib/ffmpeg/chain.test.ts` | 5 |
 | DAG `topoSort`/`isLinearGraph`/`outputNodes` (multi-input + мульти-аутпут): линия=orderedFilters, ветвление, два входа в merge, цикл/обрыв/нет input/output→null, недостижимый вход→null; мульти-аутпут (1 вход→2 выхода через split, висящий выход→null, 2 выхода→не линеен); `outputNodes` (один/несколько, порядок); рубильник линейности (один/два входа/выхода, ветвление, слияние, нода с merge), incoming/outgoing | `src/shared/lib/ffmpeg/dag.test.ts` | 21 |
-| Построитель filter_complex `buildComplexPlan` + `buildMultiOutputPlan` (`complex/build.test.ts`): обычные фильтры в лейблах, свежий лейбл на шаг, фильтр без vf насквозь, два входа, overlay/concat end-to-end, scale перед overlay, ошибки (нет файла, обрыв, неизвестный фильтр); мульти-аутпут — split/asplit на 2-3 выхода, разные кодеки по выходам (outputArgs ветки), общий фильтр до развилки (scale один раз→split), вход без файла→ошибка | `src/shared/lib/ffmpeg/complex/build.test.ts` | 17 |
+| Построитель filter_complex `buildComplexPlan` + `buildMultiOutputPlan` (`complex/build.test.ts`): обычные фильтры в лейблах, свежий лейбл на шаг, фильтр без vf насквозь, два входа, overlay/concat end-to-end, scale перед overlay, ошибки (нет файла, обрыв, неизвестный фильтр); мульти-аутпут — split/asplit на 2-3 выхода, разные кодеки по выходам (outputArgs ветки), общий фильтр до развилки (scale один раз→split), вход без файла→ошибка, overlay+прямой выход без орфан-asplit (N-018) | `src/shared/lib/ffmpeg/complex/build.test.ts` | 18 |
 | merge-операции `overlay`/`concat` (`catalog/merge.test.ts`): videoInputs/audioInputs, toComplex-фрагмент, applyMerge (overlay=размер основного, concat=сумма длительностей) | `src/shared/lib/ffmpeg/catalog/merge.test.ts` | 7 |
 | Предсказание `predictOutput`: scale/fps/trim/speed/rotate/gif/аудио, цепочка, без applyToInfo, иммутабельность; слияние (overlay=размер основного, concat=сумма длительностей, GIF через applyToInfo); размер (N-010: scale↓, trim↓, flip=реальный, extract_audio, compress CRF реалистичный); мульти-аутпут (Спринт 3, N-017): предсказание по выбранному выходу (trim-ветка vs scale-ветка → РАЗНЫЕ характеристики, несуществующий выход→null) | `src/shared/lib/ffmpeg/predict.test.ts` | 26 |
 | Оценка размера `size.ts` (N-010): estimateSize (битрейт×длительность, без данных→прежний, только видео/аудио), scaleVideoBitrate (∝ пикселям/fps, без битрейта→null, без размеров→без изменений), estimateBitrateFromCrf (CRF23≈5Мбит/с, ±6 CRF=×2/÷2, без размеров→null) | `src/shared/lib/ffmpeg/size.test.ts` | 12 |
@@ -30,7 +30,7 @@
 | Отсев не-видео при drag&drop `isSupportedVideo`: все поддерживаемые расширения, регистронезависимость, не-видео/без расширения, точки в пути | `src/shared/lib/videoExtensions.test.ts` | 4 |
 | Подстановка выходных путей `substituteOutputs` (мульти-аутпут, Спринт 3): одиночный выход, N выходов по индексу, не трогает обычные аргументы | `src/features/run-render/substituteOutputs.test.ts` | 3 |
 
-**Фронт (Vitest): 227 ✅**
+**Фронт (Vitest): 228 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
