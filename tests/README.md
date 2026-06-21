@@ -28,8 +28,9 @@
 | Валидация `validateGraph` (N-007): -vn+видеофильтр, -vn+compress, -vn+-an (пустой файл), -an+громкость (needsAudio), громкость+видеофильтр (ок), валидная цепочка, только -an, только -vn, разрыв→молчит, пустая цепочка; дубль выходного флага (N-014): compress+codec оба -c:v, одна -c:v ок, разные флаги (-c:v+-f) не дубль; merge без второго входа (overlay 1 вход→ошибка, 2 входа→ок, GIF single-input→ок) | `src/shared/lib/ffmpeg/validate.test.ts` | 16 |
 | Защита пути `safePath` (N-004): ведущий `-` → префикс ./; абсолютные/обычные/пустой не трогаем | `src/shared/lib/ffmpeg/safePath.test.ts` | 2 |
 | Отсев не-видео при drag&drop `isSupportedVideo`: все поддерживаемые расширения, регистронезависимость, не-видео/без расширения, точки в пути | `src/shared/lib/videoExtensions.test.ts` | 4 |
+| Подстановка выходных путей `substituteOutputs` (мульти-аутпут, Спринт 3): одиночный выход, N выходов по индексу, не трогает обычные аргументы | `src/features/run-render/substituteOutputs.test.ts` | 3 |
 
-**Фронт (Vitest): 206 ✅**
+**Фронт (Vitest): 222 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
