@@ -76,6 +76,7 @@ function App() {
         <FilterCatalog
           onAddFilter={graph.addFilterNode}
           onAddInput={graph.addInputNode}
+          onAddOutput={graph.addOutputNode}
           isFavorite={favorites.isFavorite}
           onToggleFavorite={favorites.toggleFavorite}
         />

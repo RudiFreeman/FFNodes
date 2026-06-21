@@ -124,6 +124,25 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     [setNodes],
   );
 
+  // Добавить дополнительный ВЫХОД (мульти-аутпут, Спринт 3): один вход → N выходов.
+  // Новая output-нода кладётся на холст БЕЗ авто-рёбер — пользователь сам тянет в неё ветку
+  // (как доп. входы). Основной выход (OUTPUT_ID) неудаляем; дополнительные — deletable.
+  const addOutputNode = useCallback(() => {
+    const newId = crypto.randomUUID();
+    setNodes((prev) => {
+      const outputCount = prev.filter((n) => n.type === "output-file").length;
+      const node: Node = {
+        id: newId,
+        type: "output-file",
+        position: { x: 560, y: 360 + (outputCount - 1) * 140 },
+        // info заполнит predict/рендер; deletable — доп. выход можно удалить
+        data: { info: null },
+        deletable: true,
+      };
+      return [...prev, node];
+    });
+  }, [setNodes]);
+
   // Добавить дополнительный вход (для overlay/concat). Файл выбирается на самой ноде.
   const addInputNode = useCallback(() => {
     const newId = crypto.randomUUID();
@@ -310,6 +329,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     onNodesDelete,
     addFilterNode,
     addInputNode,
+    addOutputNode,
     command,
     predictedOutput,
     inputPaths, // пути входов (id → path) — для превью-кадра DAG (usePreviewFrame)

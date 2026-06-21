@@ -3,7 +3,7 @@
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
 import { orderedFilters } from "./chain";
-import { isLinearGraph } from "./dag";
+import { isLinearGraph, outputNodes } from "./dag";
 import { buildComplexPlan } from "./complex/build";
 import { isComplexError } from "./complex/types";
 import { validateGraph } from "./validate";
@@ -31,6 +31,17 @@ function fileName(path: string): string {
 // Линейный граф идёт простым -vf/-af путём (как раньше); DAG (merge-операции, несколько
 // входов, ветвление) — через -filter_complex. Граница — isLinearGraph (см. dag.ts).
 export function generateCommand(graph: Graph, inputPath?: string): GeneratedCommand {
+  // Мульти-аутпут (Спринт 3, пункт 2): несколько выходов идут отдельной веткой генерации.
+  // Пока ветка не подключена — даём понятную подсказку вместо неверной команды по одному
+  // выходу (generateComplexCommand сейчас знает только про единственный выход).
+  if (outputNodes(graph).length > 1) {
+    return {
+      args: [],
+      display: "",
+      error: "Несколько выходов — генерация команды в разработке (Спринт 3)",
+    };
+  }
+
   if (!isLinearGraph(graph)) {
     return generateComplexCommand(graph, inputPath);
   }
