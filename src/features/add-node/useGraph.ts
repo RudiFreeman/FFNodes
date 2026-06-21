@@ -11,6 +11,7 @@ import {
   type Connection,
 } from "@xyflow/react";
 import type { FilterDef } from "../../shared/lib/ffmpeg/catalog";
+import { getFilterDef } from "../../shared/lib/ffmpeg/catalog";
 import type { Graph, GraphNode, ParamValue } from "../../shared/types/graph";
 import type { MediaInfo } from "../../shared/types/media";
 import { generateCommand } from "../../shared/lib/ffmpeg/generate";
@@ -142,6 +143,44 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
       return [...prev, node];
     });
   }, [setNodes]);
+
+  // Загрузить граф из открытого проекта: заменяем ноды/рёбра целиком и ДОКЛЕИВАЕМ обратно
+  // рантайм-поля, которые не сохранялись в файл (Спринт 4). У фильтр/merge-нод — onParamChange;
+  // у дополнительных входов (deletable input с path) — onChoose+nodeId (как в addInputNode),
+  // чтобы на ноде работала кнопка «Сменить файл»; info ставим null (пересчитается predict'ом).
+  // Основной вход (id INPUT_ID) восстанавливается отдельно — его путь идёт через useInputFile.
+  const loadGraph = useCallback(
+    (loadedNodes: Node[], loadedEdges: Edge[]) => {
+      const hydrated = loadedNodes.map((n) => {
+        if (n.type === "filter" || n.type === "merge") {
+          const d = n.data as Partial<FilterNodeData>;
+          // label берём из каталога по filterId (актуальное человеческое имя операции)
+          const def = d.filterId ? getFilterDef(d.filterId) : undefined;
+          return {
+            ...n,
+            data: {
+              ...d,
+              label: def?.label ?? d.filterId ?? "",
+              onParamChange,
+              params: d.params ?? {},
+            } as FilterNodeData,
+          };
+        }
+        if (n.type === "input-file" && n.id !== INPUT_ID) {
+          const d = n.data as Partial<InputNodeData>;
+          return {
+            ...n,
+            data: { info: null, path: d.path ?? null, onChoose: chooseInputFile, nodeId: n.id } as InputNodeData,
+          };
+        }
+        // основной вход / выходы — info заполнит predict
+        return { ...n, data: { ...n.data, info: null } };
+      });
+      setNodes(hydrated);
+      setEdges(loadedEdges);
+    },
+    [setNodes, setEdges, onParamChange, chooseInputFile],
+  );
 
   // Добавить дополнительный вход (для overlay/concat). Файл выбирается на самой ноде.
   const addInputNode = useCallback(() => {
@@ -345,6 +384,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     addFilterNode,
     addInputNode,
     addOutputNode,
+    loadGraph, // загрузка графа из открытого проекта (Спринт 4)
     command,
     predictedOutput,
     predictedByOutput, // предсказание по каждому выходу (мульти-аутпут: переключатель в панели)

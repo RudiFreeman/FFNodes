@@ -1,5 +1,6 @@
 // Точка входа Tauri-приложения: регистрация плагинов и команд.
 mod ffmpeg;
+mod projects;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,7 +19,16 @@ pub fn run() {
             ffmpeg::run_ffmpeg,
             ffmpeg::extract_frame,
             ffmpeg::extract_frame_complex,
-            ffmpeg::cancel_render
+            ffmpeg::cancel_render,
+            projects::write_project_file,
+            projects::read_project_file,
+            projects::path_exists,
+            projects::write_preset,
+            projects::read_preset,
+            projects::list_presets,
+            projects::delete_preset,
+            projects::write_recent,
+            projects::read_recent
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -6,13 +6,7 @@
 // Пути входов остаются абсолютными — мягкая проверка их существования делается уже в useGraph.
 
 import type { Node, Edge } from "@xyflow/react";
-import {
-  PROJECT_FORMAT,
-  PROJECT_VERSION,
-  type ProjectFile,
-  type ProjectNode,
-  type ProjectNodeType,
-} from "./project";
+import { PROJECT_FORMAT, PROJECT_VERSION, type ProjectNodeType } from "./project";
 
 // Допустимые типы нод (см. NodeCanvas.tsx nodeTypes).
 const NODE_TYPES: ReadonlySet<ProjectNodeType> = new Set<ProjectNodeType>([
