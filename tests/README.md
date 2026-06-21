@@ -22,12 +22,14 @@
 | Оценка размера `size.ts` (N-010): estimateSize (битрейт×длительность, без данных→прежний, только видео/аудио), scaleVideoBitrate (∝ пикселям/fps, без битрейта→null, без размеров→без изменений), estimateBitrateFromCrf (CRF23≈5Мбит/с, ±6 CRF=×2/÷2, без размеров→null) | `src/shared/lib/ffmpeg/size.test.ts` | 12 |
 | Vf-цепочка для кадра `videoFilterChain`: порядок фрагментов, только-кодек→пусто, без фильтров→пусто, разрыв→null, неизвестный фильтр→null; план кадра `previewPlan` (линейный→vf, GIF/overlay→complex, обрыв→null); момент кадра `previewMoment` (N-012: без trim→duration/2, trim→середина диапазона, сдвиг, clamp к длительности, невалидный trim→fallback, null→0, speed не влияет на момент, trim+speed→по trim) | `src/shared/lib/ffmpeg/frame.test.ts` | 17 |
 | Перецепка при удалении `bridgesOnDelete`+`applyBridges`: средняя нода, длинная цепочка, два подряд, два несмежных, нет входящей/исходящей, мост по полному снимку, самопетля, без дублей, иммутабельность; merge-ноды (мостим только основной вход по min targetHandle, накладка/второй ролик отцепляется) | `src/features/add-node/relink.test.ts` | 14 |
-| Пресеты «Изменить размер» `scale`: toCommand (короткая сторона/половина/свои/дефолт), applyToInfo на гориз/вертик (не раздувает), свои с авто-высотой, без размеров входа | `src/shared/lib/ffmpeg/catalog/resize.test.ts` | 11 |
+| Пресеты «Изменить размер» `scale`: toCommand (короткая сторона/половина/свои/дефолт), applyToInfo на гориз/вертик (не раздувает), свои с авто-высотой, без размеров входа; дефолты из входа (Спринт 2): `pad` (размеры входа, null→пусто), `fps` (частота входа округл., null/0→пусто) | `src/shared/lib/ffmpeg/catalog/resize.test.ts` | 16 |
+| Дефолты из входа (Спринт 2) `changeCodec.defaultsFromInfo`: h264/hevc/vp9 → label опции, кодек вне списка (av1)/null → пусто | `src/shared/lib/ffmpeg/catalog/convert.test.ts` | 5 |
+| Дефолты из входа (Спринт 2) `trim`/`crop`: `trim` (end = длительность округл., null→пусто), `crop` (w/h = кадр входа, null→пусто) | `src/shared/lib/ffmpeg/catalog/trim.test.ts` | 4 |
 | Валидация `validateGraph` (N-007): -vn+видеофильтр, -vn+compress, -vn+-an (пустой файл), -an+громкость (needsAudio), громкость+видеофильтр (ок), валидная цепочка, только -an, только -vn, разрыв→молчит, пустая цепочка; дубль выходного флага (N-014): compress+codec оба -c:v, одна -c:v ок, разные флаги (-c:v+-f) не дубль; merge без второго входа (overlay 1 вход→ошибка, 2 входа→ок, GIF single-input→ок) | `src/shared/lib/ffmpeg/validate.test.ts` | 16 |
 | Защита пути `safePath` (N-004): ведущий `-` → префикс ./; абсолютные/обычные/пустой не трогаем | `src/shared/lib/ffmpeg/safePath.test.ts` | 2 |
 | Отсев не-видео при drag&drop `isSupportedVideo`: все поддерживаемые расширения, регистронезависимость, не-видео/без расширения, точки в пути | `src/shared/lib/videoExtensions.test.ts` | 4 |
 
-**Фронт (Vitest): 192 ✅**
+**Фронт (Vitest): 206 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 

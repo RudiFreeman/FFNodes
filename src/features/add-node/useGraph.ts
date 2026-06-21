@@ -61,6 +61,9 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
       const newId = crypto.randomUUID();
       const defaults: Record<string, ParamValue> = {};
       for (const p of def.params) if (p.default !== undefined) defaults[p.id] = p.default;
+      // Дефолты из метаданных входа (если файл выбран) — поверх статичных. Берём info на
+      // момент ДОБАВЛЕНИЯ ноды; смена файла позже уже добавленные ноды не пересчитывает.
+      if (info && def.defaultsFromInfo) Object.assign(defaults, def.defaultsFromInfo(info));
 
       const data: FilterNodeData = {
         label: def.label,
@@ -99,7 +102,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
         ];
       });
     },
-    [setNodes, setEdges, onParamChange],
+    [setNodes, setEdges, onParamChange, info],
   );
 
   // Выбрать файл для ДОПОЛНИТЕЛЬНОГО входа (multi-input): диалог → ffprobe → пишем в data ноды.

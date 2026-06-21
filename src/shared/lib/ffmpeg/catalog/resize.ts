@@ -171,6 +171,11 @@ export const pad: FilterDef = {
       `pad=${p.width}:${p.height}:(ow-iw)/2:(oh-ih)/2`,
   }),
   streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
+  // Дефолт целевого размера = разрешение входа (юзер подгоняет под нужный формат).
+  defaultsFromInfo: (info) =>
+    info.width != null && info.height != null
+      ? { width: info.width, height: info.height }
+      : {},
   applyToInfo: (info, p) => {
     const outW = Number(p.width);
     const outH = Number(p.height);
@@ -206,6 +211,10 @@ export const fps: FilterDef = {
   ],
   toCommand: (p) => ({ vf: `fps=${p.value}` }),
   streams: { needsVideo: true }, // видеофильтр — нужен видеопоток
+  // Дефолт = текущий fps входа (округлённый): чаще всего его не меняют, а подгоняют.
+  // Только положительный fps: ffprobe иногда отдаёт 0 (VFR/битые контейнеры) — тогда
+  // оставляем статичный дефолт (fps=0 дал бы невалидный фильтр и падение рендера).
+  defaultsFromInfo: (info) => (info.fps && info.fps > 0 ? { value: Math.round(info.fps) } : {}),
   applyToInfo: (info, p) => {
     const newFps = Number(p.value);
     return {
