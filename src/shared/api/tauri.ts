@@ -47,8 +47,13 @@ export function onRenderProgress(cb: (percent: number) => void): Promise<Unliste
 }
 
 // Запустить рендер. args — из генератора команды; duration — длительность входа для процента.
-export async function runFfmpeg(args: string[], duration: number | null): Promise<void> {
-  return invoke("run_ffmpeg", { args, durationSec: duration });
+// outputPaths — все выходные файлы (мульти-аутпут): Rust удалит недописанные при отмене.
+export async function runFfmpeg(
+  args: string[],
+  duration: number | null,
+  outputPaths: string[],
+): Promise<void> {
+  return invoke("run_ffmpeg", { args, durationSec: duration, outputPaths });
 }
 
 // Отменить текущий рендер. Rust убивает процесс ffmpeg и удаляет недописанный файл.

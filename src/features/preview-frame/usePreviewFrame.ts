@@ -24,11 +24,13 @@ export interface PreviewFrameState {
 }
 
 // path — путь ОСНОВНОГО входа (для «До»). inputPaths — пути всех входов (id → path) для DAG.
+// selectedOutputId — для какого выхода строить «После» (мульти-аутпут); не задан — первый.
 export function usePreviewFrame(
   path: string | null,
   graph: Graph,
   duration: number | null,
   inputPaths: Map<string, string>,
+  selectedOutputId?: string,
 ) {
   const [before, setBefore] = useState<string | null>(null);
   const [after, setAfter] = useState<string | null>(null);
@@ -66,7 +68,8 @@ export function usePreviewFrame(
   }, [path, moment]);
 
   // План кадра «После»: линейный (vf) или DAG (filter_complex). null — граф не собран.
-  const plan = path ? previewPlan(graph, inputPaths) : null;
+  // Мульти-аутпут: кадр выбранного выхода (его ветка).
+  const plan = path ? previewPlan(graph, inputPaths, selectedOutputId) : null;
   // Стабильный ключ для эффекта (план — объект, пересоздаётся каждый рендер).
   const planKey = JSON.stringify(plan);
 

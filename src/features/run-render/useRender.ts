@@ -9,6 +9,7 @@ import {
   type MediaInfo,
 } from "../../shared/api/tauri";
 import type { GeneratedCommand } from "../../shared/lib/ffmpeg/generate";
+import { substituteOutputs } from "./substituteOutputs";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
 export type RenderStatus = "idle" | "running" | "done" | "error" | "cancelled";
@@ -19,6 +20,8 @@ export function useRender(command: GeneratedCommand, info: MediaInfo | null) {
   const [error, setError] = useState<string | null>(null);
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [outputInfo, setOutputInfo] = useState<MediaInfo | null>(null);
+  // Мульти-аутпут: метаданные «После» по каждому выходу (в порядке выходных секций).
+  const [outputInfos, setOutputInfos] = useState<(MediaInfo | null)[]>([]);
   const unlistenRef = useRef<UnlistenFn | null>(null);
   // Флаг «текущий рендер отменён пользователем» — чтобы в catch отличить отмену
   // (показать «Отменено», не ошибку) от настоящего сбоя ffmpeg.
@@ -34,13 +37,23 @@ export function useRender(command: GeneratedCommand, info: MediaInfo | null) {
   const render = useCallback(async () => {
     if (command.error || command.args.length === 0) return; // нечего рендерить
 
-    // Спросить, куда сохранить (имя по умолчанию — output.mp4)
-    const outPath = await pickOutputFile("output.mp4");
-    if (!outPath) return; // отмена
+    // Плейсхолдеры выходных файлов (мульти-аутпут): по одному save-диалогу на каждый.
+    // Одиночный выход — один плейсхолдер (output.mp4), как раньше.
+    const placeholders = command.outputPlaceholders ?? [];
+    if (placeholders.length === 0) return; // нечего сохранять
 
-    // В args последний элемент — плейсхолдер выходного файла, заменяем на выбранный путь
-    const args = [...command.args];
-    args[args.length - 1] = outPath;
+    // Спросить путь для каждого выхода (имя по умолчанию output_1.mp4, output_2.mp4…).
+    // Отмена любого диалога отменяет весь рендер.
+    const chosen: string[] = [];
+    for (let i = 0; i < placeholders.length; i++) {
+      const defaultName = placeholders.length === 1 ? "output.mp4" : `output_${i + 1}.mp4`;
+      const p = await pickOutputFile(defaultName);
+      if (!p) return; // отмена — выходим, ничего не запускаем
+      chosen.push(p);
+    }
+
+    // Подставить выбранные пути в args: каждый плейсхолдер → свой путь (точное совпадение).
+    const args = substituteOutputs(command.args, placeholders, chosen);
 
     // Подписку ставим ДО запуска — иначе теряются ранние события быстрого рендера
     unlistenRef.current = await onRenderProgress((p) => setPercent(p));
@@ -50,18 +63,19 @@ export function useRender(command: GeneratedCommand, info: MediaInfo | null) {
     setPercent(0);
     setError(null);
     setOutputInfo(null); // сбросить прошлый результат — пока не отрендерили новый
+    setOutputInfos([]);
 
     try {
-      await runFfmpeg(args, info?.duration ?? null);
+      await runFfmpeg(args, info?.duration ?? null, chosen);
       setPercent(100);
       setStatus("done");
-      setOutputPath(outPath);
-      // Прозондировать результат — метаданные «После» для сравнения с входом
-      try {
-        setOutputInfo(await probeMedia(outPath));
-      } catch {
-        setOutputInfo(null); // не критично, если ffprobe не смог
-      }
+      setOutputPath(chosen[0]);
+      // Прозондировать каждый результат — метаданные «После» по выходам (ffprobe не критичен)
+      const infos = await Promise.all(
+        chosen.map((p) => probeMedia(p).catch(() => null)),
+      );
+      setOutputInfos(infos);
+      setOutputInfo(infos[0] ?? null); // совместимость: основной/первый выход
     } catch (e) {
       if (cancelledRef.current) {
         // Отмена пользователем — не ошибка: тихо вернуться в спокойное состояние
@@ -83,5 +97,5 @@ export function useRender(command: GeneratedCommand, info: MediaInfo | null) {
     await cancelRender();
   }, []);
 
-  return { status, percent, error, outputPath, outputInfo, render, cancel };
+  return { status, percent, error, outputPath, outputInfo, outputInfos, render, cancel };
 }

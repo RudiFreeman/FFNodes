@@ -2,13 +2,14 @@
 // группы-аккордеоны (по умолчанию свёрнуты). Звёздочки — как эффекты в Premiere.
 // См. docs/ARCHITECTURE.md §3, docs/UI.md §4.
 import { useMemo, useState } from "react";
-import { Search, ChevronDown, ChevronRight, Star, FilePlus } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Star, FilePlus, FileOutput } from "lucide-react";
 import { catalogByCategory, CATALOG, type FilterDef } from "../../shared/lib/ffmpeg/catalog";
 import { CatalogItem } from "./CatalogItem";
 
 interface FilterCatalogProps {
   onAddFilter: (def: FilterDef) => void;
   onAddInput: () => void; // добавить дополнительный вход (multi-input: overlay/concat)
+  onAddOutput: () => void; // добавить дополнительный выход (мульти-аутпут: 1 вход → N выходов)
   isFavorite: (id: string) => boolean;
   onToggleFavorite: (id: string) => void;
 }
@@ -16,6 +17,7 @@ interface FilterCatalogProps {
 export function FilterCatalog({
   onAddFilter,
   onAddInput,
+  onAddOutput,
   isFavorite,
   onToggleFavorite,
 }: FilterCatalogProps) {
@@ -69,15 +71,24 @@ export function FilterCatalog({
         Каталог функций
       </div>
 
-      {/* Добавить вход — для наложения (overlay) и склейки (concat): нужен второй файл */}
-      <div className="border-b border-border p-2">
+      {/* Добавить вход — для наложения (overlay) и склейки (concat): нужен второй файл.
+          Добавить выход — мульти-аутпут: один вход → несколько выходных файлов (Спринт 3). */}
+      <div className="flex gap-2 border-b border-border p-2">
         <button
           type="button"
           onClick={onAddInput}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-node-input/60 px-2.5 py-1.5 text-sm text-fg hover:bg-node-input/10"
+          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-node-input/60 px-2.5 py-1.5 text-sm text-fg hover:bg-node-input/10"
         >
           <FilePlus className="h-4 w-4 text-node-input" aria-hidden />
-          Добавить вход
+          Вход
+        </button>
+        <button
+          type="button"
+          onClick={onAddOutput}
+          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-node-output/60 px-2.5 py-1.5 text-sm text-fg hover:bg-node-output/10"
+        >
+          <FileOutput className="h-4 w-4 text-node-output" aria-hidden />
+          Выход
         </button>
       </div>
 

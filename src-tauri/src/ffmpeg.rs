@@ -400,10 +400,16 @@ pub async fn run_ffmpeg(
     state: tauri::State<'_, RenderState>,
     args: Vec<String>,
     duration_sec: Option<f64>,
+    output_paths: Vec<String>,
 ) -> Result<(), String> {
-    // Выходной путь — последний аргумент (плейсхолдер заменён фронтом на реальный путь).
-    // Запоминаем заранее, чтобы удалить недописанный файл при отмене.
-    let out_path = args.last().cloned();
+    // Выходные пути (мульти-аутпут): фронт передаёт все выходные файлы команды, чтобы при
+    // отмене удалить недописанные. Пусто (обратная совместимость) — fallback на последний
+    // аргумент (одиночный выход).
+    let out_paths: Vec<String> = if output_paths.is_empty() {
+        args.last().cloned().into_iter().collect()
+    } else {
+        output_paths
+    };
 
     // Добавляем машинный прогресс в stdout и подавляем обычную статистику
     let mut full_args: Vec<String> = vec!["-y".into(), "-progress".into(), "pipe:1".into(), "-nostats".into()];
@@ -443,9 +449,9 @@ pub async fn run_ffmpeg(
     let child = state.child.lock().unwrap().take();
     let cancelled = state.cancelled.load(Ordering::SeqCst);
 
-    // Отмена: процесс убит из cancel_render. Тихо завершаем и чистим битый файл.
+    // Отмена: процесс убит из cancel_render. Тихо завершаем и чистим битые выходные файлы.
     if cancelled {
-        if let Some(path) = &out_path {
+        for path in &out_paths {
             let _ = std::fs::remove_file(path); // файла может не быть — игнорируем
         }
         return Err("Рендер отменён".to_string());
