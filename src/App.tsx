@@ -14,6 +14,9 @@ import { useInputFile } from "./features/input-file/useInputFile";
 import { useFileDrop } from "./features/input-file/useFileDrop";
 import { useRender } from "./features/run-render/useRender";
 import { useFavorites } from "./features/favorites/useFavorites";
+import { useProject } from "./features/project/useProject";
+import { useRecentProjects } from "./features/project/useRecentProjects";
+import { usePresets } from "./features/project/usePresets";
 import { usePreviewFrame } from "./features/preview-frame/usePreviewFrame";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import "./App.css";
@@ -25,6 +28,32 @@ function App() {
   const graph = useGraph(input.path, input.info);
   const render = useRender(graph.command, input.info);
   const favorites = useFavorites();
+
+  // Список последних проектов (пункт 4) + сохранение/открытие проекта (пункт 2).
+  const recentProjects = useRecentProjects();
+  const project = useProject({
+    nodes: graph.nodes,
+    edges: graph.edges,
+    inputPath: input.path,
+    loadGraph: graph.loadGraph,
+    setInputPath: input.loadPath,
+    clearInput: input.clear,
+  });
+
+  // Сохранить → запомнить в «Недавние». Открыть → загрузить и запомнить (пропал файл — забыть).
+  const handleSave = async () => {
+    const saved = await project.saveProject();
+    if (saved) recentProjects.remember(saved.path, saved.name);
+  };
+  const handleOpenPath = async (path: string) => {
+    const opened = await project.openProjectFromPath(path);
+    if (opened) recentProjects.remember(opened.path, opened.name);
+    else recentProjects.forget(path); // не открылся (битый/пропал) — убрать из списка
+  };
+  const handleOpen = async () => {
+    const opened = await project.openProject();
+    if (opened) recentProjects.remember(opened.path, opened.name);
+  };
 
   // Выходные ноды графа в порядке (мульти-аутпут: вкладки «После»). Подпись «Выход N».
   const outputs = useMemo(() => {
@@ -38,6 +67,16 @@ function App() {
     selectedOutputId && outputs.some((o) => o.id === selectedOutputId)
       ? selectedOutputId
       : outputs[0]?.id ?? null;
+
+  // Пресеты выходной ветки (пункт 3): применяются к ВЫБРАННОМУ выходу (activeOutputId).
+  const presets = usePresets();
+  const handleSavePreset = (name: string) => {
+    if (activeOutputId) void presets.savePreset(name, graph.graph, activeOutputId);
+  };
+  const handleApplyPreset = async (name: string) => {
+    const steps = await presets.loadPresetSteps(name);
+    if (steps && activeOutputId) graph.applyPreset(steps, activeOutputId);
+  };
 
   // Кадры превью «До»/«После» из исходника и графа (линейный → -vf, DAG → filter_complex);
   // «После» — для выбранного выхода (мульти-аутпут).
@@ -67,6 +106,11 @@ function App() {
         onCancel={render.cancel}
         rendering={render.status === "running"}
         canRender={canRender}
+        projectName={project.name}
+        onSave={handleSave}
+        onOpen={handleOpen}
+        recent={recentProjects.recent}
+        onOpenRecent={handleOpenPath}
       />
       <ProgressBar
         visible={render.status === "running" || render.status === "done"}
@@ -103,6 +147,11 @@ function App() {
           onAddOutput={graph.addOutputNode}
           isFavorite={favorites.isFavorite}
           onToggleFavorite={favorites.toggleFavorite}
+          presetNames={presets.names}
+          presetError={presets.error}
+          onApplyPreset={handleApplyPreset}
+          onSavePreset={handleSavePreset}
+          onDeletePreset={presets.removePreset}
         />
       </div>
 

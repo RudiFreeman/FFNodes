@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Search, ChevronDown, ChevronRight, Star, FilePlus, FileOutput } from "lucide-react";
 import { catalogByCategory, CATALOG, type FilterDef } from "../../shared/lib/ffmpeg/catalog";
 import { CatalogItem } from "./CatalogItem";
+import { PresetBar } from "./PresetBar";
 
 interface FilterCatalogProps {
   onAddFilter: (def: FilterDef) => void;
@@ -12,6 +13,12 @@ interface FilterCatalogProps {
   onAddOutput: () => void; // добавить дополнительный выход (мульти-аутпут: 1 вход → N выходов)
   isFavorite: (id: string) => boolean;
   onToggleFavorite: (id: string) => void;
+  // Пресеты выходной ветки (Спринт 4, пункт 3)
+  presetNames: string[];
+  presetError: string | null;
+  onApplyPreset: (name: string) => void;
+  onSavePreset: (name: string) => void;
+  onDeletePreset: (name: string) => void;
 }
 
 export function FilterCatalog({
@@ -20,6 +27,11 @@ export function FilterCatalog({
   onAddOutput,
   isFavorite,
   onToggleFavorite,
+  presetNames,
+  presetError,
+  onApplyPreset,
+  onSavePreset,
+  onDeletePreset,
 }: FilterCatalogProps) {
   const [query, setQuery] = useState("");
   // Развёрнутые категории. По умолчанию ВСЕ свёрнуты (функций много) — пустое множество.
@@ -91,6 +103,15 @@ export function FilterCatalog({
           Выход
         </button>
       </div>
+
+      {/* Пресеты выходной ветки (Спринт 4): применить к выбранному выходу / сохранить */}
+      <PresetBar
+        names={presetNames}
+        error={presetError}
+        onApply={onApplyPreset}
+        onSave={onSavePreset}
+        onDelete={onDeletePreset}
+      />
 
       {/* Поиск */}
       <div className="border-b border-border p-2">

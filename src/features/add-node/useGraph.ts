@@ -11,10 +11,12 @@ import {
   type Connection,
 } from "@xyflow/react";
 import type { FilterDef } from "../../shared/lib/ffmpeg/catalog";
+import { getFilterDef } from "../../shared/lib/ffmpeg/catalog";
 import type { Graph, GraphNode, ParamValue } from "../../shared/types/graph";
 import type { MediaInfo } from "../../shared/types/media";
 import { generateCommand } from "../../shared/lib/ffmpeg/generate";
 import { predictOutput } from "../../shared/lib/ffmpeg/predict";
+import type { PresetStep } from "../../shared/lib/project/preset";
 import { bridgesOnDelete, applyBridges } from "./relink";
 import { pickInputFile, probeMedia } from "../../shared/api/tauri";
 import type { FilterNodeData } from "../../widgets/NodeCanvas/nodes/FilterNode";
@@ -142,6 +144,103 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
       return [...prev, node];
     });
   }, [setNodes]);
+
+  // Загрузить граф из открытого проекта: заменяем ноды/рёбра целиком и ДОКЛЕИВАЕМ обратно
+  // рантайм-поля, которые не сохранялись в файл (Спринт 4). У фильтр/merge-нод — onParamChange;
+  // у дополнительных входов (deletable input с path) — onChoose+nodeId (как в addInputNode),
+  // чтобы на ноде работала кнопка «Сменить файл»; info ставим null (пересчитается predict'ом).
+  // Основной вход (id INPUT_ID) восстанавливается отдельно — его путь идёт через useInputFile.
+  const loadGraph = useCallback(
+    (loadedNodes: Node[], loadedEdges: Edge[]) => {
+      const hydrated = loadedNodes.map((n) => {
+        if (n.type === "filter" || n.type === "merge") {
+          const d = n.data as Partial<FilterNodeData>;
+          // label берём из каталога по filterId (актуальное человеческое имя операции)
+          const def = d.filterId ? getFilterDef(d.filterId) : undefined;
+          return {
+            ...n,
+            data: {
+              ...d,
+              label: def?.label ?? d.filterId ?? "",
+              onParamChange,
+              params: d.params ?? {},
+            } as FilterNodeData,
+          };
+        }
+        if (n.type === "input-file" && n.id !== INPUT_ID) {
+          const d = n.data as Partial<InputNodeData>;
+          return {
+            ...n,
+            data: { info: null, path: d.path ?? null, onChoose: chooseInputFile, nodeId: n.id } as InputNodeData,
+          };
+        }
+        // основной вход / выходы — info заполнит predict
+        return { ...n, data: { ...n.data, info: null } };
+      });
+      // Инвариант «основной вход/выход неудаляемы» восстанавливаем принудительно, не доверяя
+      // deletable из файла (подменённый проект мог снять флаг). Основной вход — id INPUT_ID;
+      // основной выход — первая по порядку output-нода (как и при обычной работе).
+      const firstOutputId = hydrated.find((n) => n.type === "output-file")?.id;
+      const guarded = hydrated.map((n) => {
+        if (n.id === INPUT_ID || n.id === firstOutputId) return { ...n, deletable: false };
+        return n;
+      });
+      setNodes(guarded);
+      setEdges(loadedEdges);
+    },
+    [setNodes, setEdges, onParamChange, chooseInputFile],
+  );
+
+  // Применить пресет к выходу (Спринт 4, пункт 3): создаёт фильтр-ноды из шагов пресета
+  // (новые id) цепочкой и ВСТАВЛЯЕТ их в ветку указанного выхода — между его текущим
+  // предшественником и самой выходной нодой. outputId по умолчанию — основной выход.
+  // Пресет file-agnostic: только операции+params, входы не трогаем.
+  const applyPreset = useCallback(
+    (steps: PresetStep[], outputId: string = OUTPUT_ID) => {
+      if (steps.length === 0) return;
+      // Защита от гонки: выбранный выход мог исчезнуть, пока пресет читался с диска (async).
+      // Применяем только если outputId ещё существует — иначе создали бы рёбра в мёртвый узел.
+      if (!nodes.some((n) => n.id === outputId && n.type === "output-file")) return;
+      // Заранее генерируем id для каждого шага — нужны и для нод, и для рёбер
+      const ids = steps.map(() => crypto.randomUUID());
+
+      setNodes((prev) => {
+        const count = prev.filter((n) => n.type === "filter" || n.type === "merge").length;
+        const newNodes: Node[] = steps.map((step, i) => {
+          const def = getFilterDef(step.filterId);
+          const data: FilterNodeData = {
+            label: def?.label ?? step.filterId,
+            filterId: step.filterId,
+            params: { ...step.params },
+            onParamChange,
+          };
+          return {
+            id: ids[i],
+            type: "filter",
+            position: { x: 280, y: 80 + (count + i) * 110 },
+            data,
+          };
+        });
+        return [...prev, ...newNodes];
+      });
+
+      // Перецепить ветку выхода: предшественник выхода → первый шаг; шаги цепочкой;
+      // последний шаг → выход. Если в выход ничего не вело — тянем от основного входа.
+      setEdges((prev) => {
+        const toOutput = prev.find((e) => e.target === outputId);
+        const rest = prev.filter((e) => e.target !== outputId);
+        const head = toOutput?.source ?? INPUT_ID;
+        const chain: Edge[] = [];
+        chain.push({ id: `${head}-${ids[0]}`, source: head, target: ids[0] });
+        for (let i = 0; i < ids.length - 1; i++) {
+          chain.push({ id: `${ids[i]}-${ids[i + 1]}`, source: ids[i], target: ids[i + 1] });
+        }
+        chain.push({ id: `${ids[ids.length - 1]}-${outputId}`, source: ids[ids.length - 1], target: outputId });
+        return [...rest, ...chain];
+      });
+    },
+    [nodes, setNodes, setEdges, onParamChange],
+  );
 
   // Добавить дополнительный вход (для overlay/concat). Файл выбирается на самой ноде.
   const addInputNode = useCallback(() => {
@@ -345,6 +444,8 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     addFilterNode,
     addInputNode,
     addOutputNode,
+    loadGraph, // загрузка графа из открытого проекта (Спринт 4)
+    applyPreset, // применить пресет к выходу (Спринт 4, пункт 3)
     command,
     predictedOutput,
     predictedByOutput, // предсказание по каждому выходу (мульти-аутпут: переключатель в панели)

@@ -21,6 +21,8 @@ export function useInputFile() {
 
   // Общий приём готового пути: показать его, прочитать метаданные (ffprobe).
   // Путь сюда приходит уже обезопашенным (из диалога — pickInputFile; из drop — acceptDroppedPath).
+  // Если файл недоступен (переехал/удалён — частый случай при открытии проекта), ffprobe
+  // упадёт → ошибка показывается, но приложение не падает; путь остаётся для контекста.
   const loadPath = useCallback(async (path: string) => {
     setState({ path, info: null, loading: true, error: null });
     try {
@@ -29,6 +31,11 @@ export function useInputFile() {
     } catch (e) {
       setState({ path, info: null, loading: false, error: String(e) });
     }
+  }, []);
+
+  // Сбросить вход (при открытии проекта без основного входа).
+  const clear = useCallback(() => {
+    setState({ path: null, info: null, loading: false, error: null });
   }, []);
 
   // Выбрать файл через системный диалог и прочитать метаданные
@@ -58,5 +65,6 @@ export function useInputFile() {
     [loadPath],
   );
 
-  return { ...state, choose, acceptDroppedPath };
+  // loadPath/clear экспортируем — нужны при открытии проекта (восстановление основного входа).
+  return { ...state, choose, acceptDroppedPath, loadPath, clear };
 }
