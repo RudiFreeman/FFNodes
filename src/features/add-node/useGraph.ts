@@ -16,6 +16,7 @@ import type { Graph, GraphNode, ParamValue } from "../../shared/types/graph";
 import type { MediaInfo } from "../../shared/types/media";
 import { generateCommand } from "../../shared/lib/ffmpeg/generate";
 import { predictOutput } from "../../shared/lib/ffmpeg/predict";
+import type { PresetStep } from "../../shared/lib/project/preset";
 import { bridgesOnDelete, applyBridges } from "./relink";
 import { pickInputFile, probeMedia } from "../../shared/api/tauri";
 import type { FilterNodeData } from "../../widgets/NodeCanvas/nodes/FilterNode";
@@ -180,6 +181,54 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
       setEdges(loadedEdges);
     },
     [setNodes, setEdges, onParamChange, chooseInputFile],
+  );
+
+  // Применить пресет к выходу (Спринт 4, пункт 3): создаёт фильтр-ноды из шагов пресета
+  // (новые id) цепочкой и ВСТАВЛЯЕТ их в ветку указанного выхода — между его текущим
+  // предшественником и самой выходной нодой. outputId по умолчанию — основной выход.
+  // Пресет file-agnostic: только операции+params, входы не трогаем.
+  const applyPreset = useCallback(
+    (steps: PresetStep[], outputId: string = OUTPUT_ID) => {
+      if (steps.length === 0) return;
+      // Заранее генерируем id для каждого шага — нужны и для нод, и для рёбер
+      const ids = steps.map(() => crypto.randomUUID());
+
+      setNodes((prev) => {
+        const count = prev.filter((n) => n.type === "filter" || n.type === "merge").length;
+        const newNodes: Node[] = steps.map((step, i) => {
+          const def = getFilterDef(step.filterId);
+          const data: FilterNodeData = {
+            label: def?.label ?? step.filterId,
+            filterId: step.filterId,
+            params: { ...step.params },
+            onParamChange,
+          };
+          return {
+            id: ids[i],
+            type: "filter",
+            position: { x: 280, y: 80 + (count + i) * 110 },
+            data,
+          };
+        });
+        return [...prev, ...newNodes];
+      });
+
+      // Перецепить ветку выхода: предшественник выхода → первый шаг; шаги цепочкой;
+      // последний шаг → выход. Если в выход ничего не вело — тянем от основного входа.
+      setEdges((prev) => {
+        const toOutput = prev.find((e) => e.target === outputId);
+        const rest = prev.filter((e) => e.target !== outputId);
+        const head = toOutput?.source ?? INPUT_ID;
+        const chain: Edge[] = [];
+        chain.push({ id: `${head}-${ids[0]}`, source: head, target: ids[0] });
+        for (let i = 0; i < ids.length - 1; i++) {
+          chain.push({ id: `${ids[i]}-${ids[i + 1]}`, source: ids[i], target: ids[i + 1] });
+        }
+        chain.push({ id: `${ids[ids.length - 1]}-${outputId}`, source: ids[ids.length - 1], target: outputId });
+        return [...rest, ...chain];
+      });
+    },
+    [setNodes, setEdges, onParamChange],
   );
 
   // Добавить дополнительный вход (для overlay/concat). Файл выбирается на самой ноде.
@@ -385,6 +434,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     addInputNode,
     addOutputNode,
     loadGraph, // загрузка графа из открытого проекта (Спринт 4)
+    applyPreset, // применить пресет к выходу (Спринт 4, пункт 3)
     command,
     predictedOutput,
     predictedByOutput, // предсказание по каждому выходу (мульти-аутпут: переключатель в панели)

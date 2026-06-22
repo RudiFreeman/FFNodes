@@ -16,6 +16,7 @@ import { useRender } from "./features/run-render/useRender";
 import { useFavorites } from "./features/favorites/useFavorites";
 import { useProject } from "./features/project/useProject";
 import { useRecentProjects } from "./features/project/useRecentProjects";
+import { usePresets } from "./features/project/usePresets";
 import { usePreviewFrame } from "./features/preview-frame/usePreviewFrame";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import "./App.css";
@@ -66,6 +67,16 @@ function App() {
     selectedOutputId && outputs.some((o) => o.id === selectedOutputId)
       ? selectedOutputId
       : outputs[0]?.id ?? null;
+
+  // Пресеты выходной ветки (пункт 3): применяются к ВЫБРАННОМУ выходу (activeOutputId).
+  const presets = usePresets();
+  const handleSavePreset = (name: string) => {
+    if (activeOutputId) void presets.savePreset(name, graph.graph, activeOutputId);
+  };
+  const handleApplyPreset = async (name: string) => {
+    const steps = await presets.loadPresetSteps(name);
+    if (steps && activeOutputId) graph.applyPreset(steps, activeOutputId);
+  };
 
   // Кадры превью «До»/«После» из исходника и графа (линейный → -vf, DAG → filter_complex);
   // «После» — для выбранного выхода (мульти-аутпут).
@@ -136,6 +147,11 @@ function App() {
           onAddOutput={graph.addOutputNode}
           isFavorite={favorites.isFavorite}
           onToggleFavorite={favorites.toggleFavorite}
+          presetNames={presets.names}
+          presetError={presets.error}
+          onApplyPreset={handleApplyPreset}
+          onSavePreset={handleSavePreset}
+          onDeletePreset={presets.removePreset}
         />
       </div>
 
