@@ -9,6 +9,7 @@ import { PreviewPanel } from "./widgets/PreviewPanel/PreviewPanel";
 import { NodeCanvas } from "./widgets/NodeCanvas/NodeCanvas";
 import { FilterCatalog } from "./widgets/FilterCatalog/FilterCatalog";
 import { CommandBar } from "./widgets/CommandBar/CommandBar";
+import { WelcomeScreen } from "./widgets/WelcomeScreen/WelcomeScreen";
 import { useGraph } from "./features/add-node/useGraph";
 import { useInputFile } from "./features/input-file/useInputFile";
 import { useFileDrop } from "./features/input-file/useFileDrop";
@@ -29,6 +30,11 @@ function App() {
   const render = useRender(graph.command, input.info);
   const favorites = useFavorites();
 
+  // Приветственный экран (Спринт 5): пока проект не выбран (started=false) — показываем
+  // WelcomeScreen вместо холста. Любое действие (новый/открыть/недавний) включает холст;
+  // назад к приветствию в рамках сессии не возвращаемся (решение по UX-минимализму).
+  const [started, setStarted] = useState(false);
+
   // Список последних проектов (пункт 4) + сохранение/открытие проекта (пункт 2).
   const recentProjects = useRecentProjects();
   const project = useProject({
@@ -40,19 +46,32 @@ function App() {
     clearInput: input.clear,
   });
 
+  // Новый проект (Спринт 5): граф уже инициализирован как input→output в useGraph — отдельный
+  // сброс не нужен, просто уходим с приветствия на пустой холст.
+  const handleNew = () => setStarted(true);
+
   // Сохранить → запомнить в «Недавние». Открыть → загрузить и запомнить (пропал файл — забыть).
+  // Успешное открытие также уводит с приветствия на холст (started=true). Отмена диалога или
+  // битый/пропавший файл (opened===null) оставляют пользователя там, где он был.
   const handleSave = async () => {
     const saved = await project.saveProject();
     if (saved) recentProjects.remember(saved.path, saved.name);
   };
   const handleOpenPath = async (path: string) => {
     const opened = await project.openProjectFromPath(path);
-    if (opened) recentProjects.remember(opened.path, opened.name);
-    else recentProjects.forget(path); // не открылся (битый/пропал) — убрать из списка
+    if (opened) {
+      recentProjects.remember(opened.path, opened.name);
+      setStarted(true);
+    } else {
+      recentProjects.forget(path); // не открылся (битый/пропал) — убрать из списка
+    }
   };
   const handleOpen = async () => {
     const opened = await project.openProject();
-    if (opened) recentProjects.remember(opened.path, opened.name);
+    if (opened) {
+      recentProjects.remember(opened.path, opened.name);
+      setStarted(true);
+    }
   };
 
   // Выходные ноды графа в порядке (мульти-аутпут: вкладки «После»). Подпись «Выход N».
@@ -98,6 +117,19 @@ function App() {
     activeIndex >= 0 ? render.outputInfos[activeIndex] ?? null : render.outputInfo;
   const afterInfo =
     renderedInfo ?? (activeOutputId ? graph.predictedByOutput.get(activeOutputId) ?? null : graph.predictedOutput);
+
+  // Холодный старт — показываем приветствие (хуки выше уже смонтированы и общие с холстом,
+  // поэтому гейт здесь, а не размонтированием App). После выбора — холст ниже.
+  if (!started) {
+    return (
+      <WelcomeScreen
+        recent={recentProjects.recent}
+        onNew={handleNew}
+        onOpen={handleOpen}
+        onOpenRecent={handleOpenPath}
+      />
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-bg text-fg">
