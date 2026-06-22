@@ -1,6 +1,6 @@
 [package]
 name = "ffmpeg-visual"
-version = "0.1.0"
+version = "1.0.0"
 description = "FFNodes — визуальный нодовый редактор поверх FFmpeg"
 authors = ["Aleksei"]
 edition = "2021"
