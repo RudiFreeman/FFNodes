@@ -16,6 +16,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Архитектура: модель графа → генерация FFmpeg-команды → исполнение через Tauri |
 | [CODE_NOTES.md](CODE_NOTES.md) | Журнал наблюдений и техдолга (правило №6 CLAUDE.md) |
 | [assets/](assets/) | Изображения для документации (скриншоты README) |
+| [../.github/workflows/README.md](../.github/workflows/README.md) | CI: workflow сборки бандлов под 3 ОС (Mac/Win/Linux) и заливки в Release |
 | [../tests/README.md](../tests/README.md) | Реестр покрытия тестами (сами тесты — рядом с кодом) |
 | [../CHANGELOG.md](../CHANGELOG.md) | История завершённых этапов и версий |
 

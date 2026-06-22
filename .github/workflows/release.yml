@@ -1,0 +1,112 @@
+# Сборка бандлов FFNodes под 3 ОС (macOS / Windows / Linux) и заливка в GitHub Release.
+#
+# Триггеры:
+#   - push тега вида v* (наш релизный флоу — релизим тегами);
+#   - workflow_dispatch — ручной запуск из вкладки Actions (поле tag) для проверки CI
+#     без боевого тега (ассеты уходят в черновой релиз с указанным тегом).
+#
+# Подпись/нотаризация НЕ настроены осознанно (open-source v1): пользователь увидит
+# предупреждение ОС «неизвестный разработчик». Это нормально на старте; подпись —
+# отдельная задача (требует платных сертификатов + секретов). Поэтому новых секретов нет:
+# используется только встроенный GITHUB_TOKEN.
+#
+# FFmpeg/ffprobe в CI НЕ ставим: Tauri собирает оболочку, ffmpeg вызывается у пользователя
+# в рантайме — на самой сборке он не нужен.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза для черновика (напр. v1.0.1-rc-test). Для ручной проверки CI."
+        required: true
+        default: "v0.0.0-test"
+
+# tauri-action создаёт/обновляет Release и грузит в него ассеты — нужно право на запись.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon (arm64)
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            rust-target: aarch64-apple-darwin
+          # Intel-маки (x86_64)
+          - platform: macos-13
+            args: "--target x86_64-apple-darwin"
+            rust-target: x86_64-apple-darwin
+          # Linux
+          - platform: ubuntu-22.04
+            args: ""
+            rust-target: ""
+          # Windows
+          - platform: windows-latest
+            args: ""
+            rust-target: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Системные зависимости Tauri 2 для Linux (webkit2gtk 4.1 и пр.).
+      # Только на ubuntu — остальные ОС эти пакеты не имеют и не требуют.
+      - name: Установить системные зависимости (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Установить Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      # Кэш Rust-сборки между прогонами (target лежит в src-tauri).
+      - name: Кэш Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Установить зависимости фронтенда
+        run: npm ci
+
+      # tauri-action сам зовёт beforeBuildCommand (npm run build), собирает бандлы
+      # и грузит их в Release. tagName берётся из тега (push) или из ручного ввода.
+      - name: Собрать и опубликовать (tauri-action)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: "FFNodes ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseBody: "Бандлы собраны автоматически (CI). Приложение без цифровой подписи — при первом запуске ОС может показать предупреждение «неизвестный разработчик»."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

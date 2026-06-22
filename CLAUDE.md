@@ -218,11 +218,23 @@ src-tauri/                # Rust: run_ffmpeg, probe_media, file pickers
   filter_complex), N-021 (дубль планировщиков build + лишние topoSort). Закрыты: N-008, N-010,
   N-012, N-016, N-017, N-018.
 - **🎉 Релиз v1.0.0 выпущен (2026-06-22):** тег `v1.0.0`, GitHub Release. Версия `1.0.0` в
-  package.json/tauri.conf.json/Cargo.toml. Бинари (mac/win/linux) пока НЕ в Release —
-  сборка под 3 ОС требует CI (GitHub Actions / tauri-action), отдельная задача.
-- **Следующий шаг:** CI-сборка бандлов под 3 ОС (приложить бинари к Release v1);
+  package.json/tauri.conf.json/Cargo.toml.
+- **CI-сборка бандлов под 3 ОС (этап «ci-release-builds»):** `.github/workflows/release.yml` —
+  GitHub Actions собирает FFNodes под mac/win/linux и грузит бинари в Release. Триггер: push
+  тега `v*` (релизный флоу) ИЛИ ручной `workflow_dispatch` (поле `tag` — проверка CI без
+  боевого тега). Матрица 4 job'а: macos-latest (arm64), macos-13 (Intel), ubuntu-22.04
+  (+apt-зависимости Tauri 2: libwebkit2gtk-4.1-dev и пр.), windows-latest. Сборка —
+  `tauri-apps/tauri-action@v0` (сам зовёт `npm run build` + `tauri build`, создаёт/обновляет
+  Release, грузит ассеты). `releaseDraft: true` — релиз черновиком, публикуется вручную.
+  🔒 Без подписи/нотаризации осознанно (warning «неизвестный разработчик» — ОК для open-source
+  v1); новых секретов нет, только встроенный `GITHUB_TOKEN`. FFmpeg в CI НЕ ставится (Tauri
+  собирает оболочку, ffmpeg — у юзера в рантайме). Проверка только реальным прогоном Actions
+  (локально 3 ОС нет): сперва ручной запуск с тестовым тегом → 4 job'а зелёные → затем боевой
+  тег. Доки: `.github/workflows/README.md` + строка в `docs/README.md`. Подпись — отдельная
+  задача потом.
+- **Следующий шаг:** прогнать CI на тестовом теге, при успехе перевыпустить v1.0.0 с бинарями;
   видеоплеер с проигрыванием до/после (нативный `<video>` не играет HEVC/Main 10);
-  закрыть техдолг N-019/N-020/N-021.
+  настроить подпись/нотаризацию (mac/win); закрыть техдолг N-019/N-020/N-021.
 - **История завершённого — [CHANGELOG.md](CHANGELOG.md).**
 - **Ближайшие шаги — [docs/PRD.md](docs/PRD.md) §8.**
 
