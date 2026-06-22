@@ -41,14 +41,14 @@ export function deserializeProject(raw: unknown): DeserializeResult {
     throw new ProjectFormatError("Файл проекта пуст или повреждён.");
   }
   if (raw.format !== PROJECT_FORMAT) {
-    throw new ProjectFormatError("Это не файл проекта FFmpeg Visual.");
+    throw new ProjectFormatError("Это не файл проекта FFNodes.");
   }
   if (typeof raw.version !== "number") {
     throw new ProjectFormatError("В файле проекта не указана версия.");
   }
   if (raw.version > PROJECT_VERSION) {
     throw new ProjectFormatError(
-      `Файл создан в более новой версии приложения (${raw.version}). Обнови FFmpeg Visual.`,
+      `Файл создан в более новой версии приложения (${raw.version}). Обнови FFNodes.`,
     );
   }
   // raw.version < PROJECT_VERSION — здесь будет миграция, когда схема изменится. Пока v1.

@@ -1,4 +1,4 @@
-# Архитектура — FFmpeg Visual
+# Архитектура — FFNodes
 
 > Как граф нод превращается в корректную FFmpeg-команду и исполняется.
 > Стек: Tauri (Rust-оболочка) + React/TypeScript (UI + логика) + React Flow (холст).

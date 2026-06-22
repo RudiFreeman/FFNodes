@@ -1,7 +1,7 @@
 [package]
 name = "ffmpeg-visual"
 version = "0.1.0"
-description = "FFmpeg Visual — визуальная обёртка над FFmpeg"
+description = "FFNodes — визуальный нодовый редактор поверх FFmpeg"
 authors = ["Aleksei"]
 edition = "2021"
 

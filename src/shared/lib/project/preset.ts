@@ -82,7 +82,7 @@ export function parsePreset(raw: unknown): Preset {
     throw new PresetFormatError("Файл пресета повреждён.");
   }
   const r = raw as Record<string, unknown>;
-  if (r.format !== PRESET_FORMAT) throw new PresetFormatError("Это не пресет FFmpeg Visual.");
+  if (r.format !== PRESET_FORMAT) throw new PresetFormatError("Это не пресет FFNodes.");
   if (typeof r.version !== "number") throw new PresetFormatError("В пресете не указана версия.");
   if (r.version > PRESET_VERSION) {
     throw new PresetFormatError("Пресет создан в более новой версии приложения.");

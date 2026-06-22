@@ -12,7 +12,7 @@ const PROJECT_EXT = "ffvproj";
 export async function pickProjectSaveFile(defaultName: string): Promise<string | null> {
   const selected = await save({
     defaultPath: defaultName,
-    filters: [{ name: "Проект FFmpeg Visual", extensions: [PROJECT_EXT] }],
+    filters: [{ name: "Проект FFNodes", extensions: [PROJECT_EXT] }],
   });
   return selected ? safePath(selected) : null;
 }
@@ -22,7 +22,7 @@ export async function pickProjectOpenFile(): Promise<string | null> {
   const selected = await open({
     multiple: false,
     directory: false,
-    filters: [{ name: "Проект FFmpeg Visual", extensions: [PROJECT_EXT] }],
+    filters: [{ name: "Проект FFNodes", extensions: [PROJECT_EXT] }],
   });
   return typeof selected === "string" ? safePath(selected) : null;
 }
