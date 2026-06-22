@@ -3,6 +3,7 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { safePath } from "../lib/ffmpeg/safePath";
+import { VIDEO_EXTENSIONS } from "../lib/videoExtensions";
 import type { MediaInfo } from "../types/media";
 
 // MediaInfo живёт в shared/types/media.ts (доменный тип). Реэкспорт — чтобы существующие
@@ -17,7 +18,7 @@ export async function pickInputFile(): Promise<string | null> {
     filters: [
       {
         name: "Видео",
-        extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v", "flv", "wmv"],
+        extensions: [...VIDEO_EXTENSIONS],
       },
     ],
   });
@@ -46,8 +47,13 @@ export function onRenderProgress(cb: (percent: number) => void): Promise<Unliste
 }
 
 // Запустить рендер. args — из генератора команды; duration — длительность входа для процента.
-export async function runFfmpeg(args: string[], duration: number | null): Promise<void> {
-  return invoke("run_ffmpeg", { args, durationSec: duration });
+// outputPaths — все выходные файлы (мульти-аутпут): Rust удалит недописанные при отмене.
+export async function runFfmpeg(
+  args: string[],
+  duration: number | null,
+  outputPaths: string[],
+): Promise<void> {
+  return invoke("run_ffmpeg", { args, durationSec: duration, outputPaths });
 }
 
 // Отменить текущий рендер. Rust убивает процесс ffmpeg и удаляет недописанный файл.

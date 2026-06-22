@@ -5,6 +5,7 @@ import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { X, AlertTriangle } from "lucide-react";
 import type { ParamValue } from "../../../shared/types/graph";
 import { getFilterDef } from "../../../shared/lib/ffmpeg/catalog";
+import { HANDLE_CLASS } from "../../../shared/ui/handleClass";
 import { NodeParams } from "./NodeParams";
 
 export interface FilterNodeData {
@@ -31,7 +32,7 @@ export function FilterNode({ id, data }: NodeProps) {
         invalid ? "border-destructive" : "border-node-filter"
       }`}
     >
-      <Handle type="target" position={Position.Left} className="!bg-node-filter" />
+      <Handle type="target" position={Position.Left} className={`!bg-node-filter ${HANDLE_CLASS}`} />
       {/* Кнопка удаления ноды (× в углу). nodrag — чтобы клик не таскал ноду. */}
       <button
         type="button"
@@ -64,7 +65,7 @@ export function FilterNode({ id, data }: NodeProps) {
       {/* Параметры фильтра — редактируемые поля (общий рендер с MergeNode) */}
       <NodeParams nodeId={id} def={def} params={d.params} onParamChange={d.onParamChange} />
 
-      <Handle type="source" position={Position.Right} className="!bg-node-filter" />
+      <Handle type="source" position={Position.Right} className={`!bg-node-filter ${HANDLE_CLASS}`} />
     </div>
   );
 }

@@ -5,6 +5,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { MediaInfo } from "../../../shared/types/media";
 import { MediaSummary } from "../../../shared/ui/MediaSummary";
+import { HANDLE_CLASS } from "../../../shared/ui/handleClass";
 import { basename } from "../../../shared/lib/format";
 
 export interface InputNodeData {
@@ -49,7 +50,7 @@ export function InputNode({ data }: NodeProps) {
 
       {/* Реальные характеристики входа — размер точный (не оценка) */}
       <MediaSummary info={d.info} approxSize={false} />
-      <Handle type="source" position={Position.Right} className="!bg-node-input" />
+      <Handle type="source" position={Position.Right} className={`!bg-node-input ${HANDLE_CLASS}`} />
     </div>
   );
 }

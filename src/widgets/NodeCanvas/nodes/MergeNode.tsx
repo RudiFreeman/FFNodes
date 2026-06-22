@@ -6,6 +6,7 @@ import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { X, AlertTriangle } from "lucide-react";
 import type { ParamValue } from "../../../shared/types/graph";
 import { getFilterDef } from "../../../shared/lib/ffmpeg/catalog";
+import { HANDLE_CLASS } from "../../../shared/ui/handleClass";
 import { NodeParams } from "./NodeParams";
 
 export interface MergeNodeData {
@@ -52,7 +53,7 @@ export function MergeNode({ id, data }: NodeProps) {
           id={inp.handleId}
           position={Position.Left}
           style={{ top: inp.top }}
-          className="!bg-node-filter"
+          className={`!bg-node-filter ${HANDLE_CLASS}`}
         />
       ))}
 
@@ -94,7 +95,7 @@ export function MergeNode({ id, data }: NodeProps) {
 
       <NodeParams nodeId={id} def={def} params={d.params} onParamChange={d.onParamChange} />
 
-      <Handle type="source" position={Position.Right} className="!bg-node-filter" />
+      <Handle type="source" position={Position.Right} className={`!bg-node-filter ${HANDLE_CLASS}`} />
     </div>
   );
 }

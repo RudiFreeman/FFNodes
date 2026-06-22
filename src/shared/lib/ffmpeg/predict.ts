@@ -18,11 +18,14 @@ import { estimateSize } from "./size";
 // input — MediaInfo ОСНОВНОГО входа (обратная совместимость с линейным случаем).
 // inputInfos — характеристики по id input-нод (multi-input: overlay/concat); если нет
 // записи для входа, берётся общий input (для единственного/основного входа).
+// outputNodeId — для какого выхода считать (мульти-аутпут: у каждого выхода своя ветка с
+//   разными характеристиками). Не задан — берётся первый output (обратная совместимость).
 // null — если входа нет или граф не собран (нет валидного пути к выходу).
 export function predictOutput(
   graph: Graph,
   input: MediaInfo | null,
   inputInfos?: Map<string, MediaInfo | null>,
+  outputNodeId?: string,
 ): MediaInfo | null {
   if (!input && (!inputInfos || inputInfos.size === 0)) return null;
 
@@ -58,8 +61,12 @@ export function predictOutput(
     }
   }
 
+  // Целевой выход: заданный outputNodeId (мульти-аутпут) либо первый output (совместимость).
+  const output = outputNodeId
+    ? ordered.find((n) => n.kind === "output" && n.id === outputNodeId)
+    : ordered.find((n) => n.kind === "output");
+  if (!output) return null;
   // Результат — характеристики на входе output-ноды (её единственного предшественника)
-  const output = ordered.find((n) => n.kind === "output")!;
   const incoming = incomingEdges(graph, output.id);
   if (incoming.length === 0) return null;
   const result = out.get(incoming[0].source) ?? null;
@@ -68,8 +75,9 @@ export function predictOutput(
   // Размер пересчитываем (оценка, N-010) ТОЛЬКО если операции реально повлияли на битрейт
   // или длительность относительно исходного входа. Иначе показываем РЕАЛЬНЫЙ размер входа
   // (он точнее любой оценки — операции, не трогающие размер, его не меняют).
-  // Базой сравнения берём info входа основной ветки к output.
-  const sourceInfo = baseInputInfo(graph, ordered, input, inputInfos);
+  // Базой сравнения берём info входа ветки, ведущей к ЭТОМУ выходу (мульти-аутпут: у разных
+  // выходов разные ветки → разные базовые входы при нескольких входах).
+  const sourceInfo = baseInputInfo(graph, output.id, input, inputInfos);
   const sizeChanged =
     sourceInfo == null ||
     result.video_bitrate !== sourceInfo.video_bitrate ||
@@ -79,18 +87,16 @@ export function predictOutput(
   return { ...result, size_bytes: estimateSize(result) };
 }
 
-// Info входа, от которого идёт основная ветка к output (для сравнения «изменился ли размер»).
+// Info входа, от которого идёт ветка к указанному выходу (для сравнения «изменился ли размер»).
 // Идём по основным предшественникам от output до input-ноды.
 function baseInputInfo(
   graph: Graph,
-  ordered: { id: string; kind: string }[],
+  outputId: string,
   input: MediaInfo | null,
   inputInfos?: Map<string, MediaInfo | null>,
 ): MediaInfo | null {
-  const output = ordered.find((n) => n.kind === "output");
-  if (!output) return input;
   // Поднимаемся по первому входящему ребру до input-ноды
-  let cur = incomingEdges(graph, output.id)[0]?.source;
+  let cur = incomingEdges(graph, outputId)[0]?.source;
   const seen = new Set<string>();
   while (cur && !seen.has(cur)) {
     seen.add(cur);

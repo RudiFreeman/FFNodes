@@ -31,3 +31,17 @@ export function inputLabel(inputIndex: number, kind: "v" | "a"): StreamLabel {
 export function bracket(label: StreamLabel): string {
   return `[${label}]`;
 }
+
+// Фрагмент split/asplit: один поток, потребляемый несколькими ветками, нужно «размножить»
+// (в filter_complex каждый лейбл потребляется РОВНО один раз). Мульти-аутпут (Спринт 3):
+// один декод входа ветвится в N выходов. split — для видео, asplit — для аудио.
+// splitFragment("0:v", ["b0","b1"], "v") → "[0:v]split=2[b0][b1]".
+export function splitFragment(
+  source: StreamLabel,
+  branches: StreamLabel[],
+  kind: "v" | "a",
+): string {
+  const filter = kind === "v" ? "split" : "asplit";
+  const outs = branches.map(bracket).join("");
+  return `${bracket(source)}${filter}=${branches.length}${outs}`;
+}

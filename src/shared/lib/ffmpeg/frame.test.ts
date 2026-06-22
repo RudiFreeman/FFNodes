@@ -139,6 +139,29 @@ describe("previewPlan", () => {
     };
     expect(previewPlan(graph, new Map([["in1", "main.mp4"]]))).toBeNull();
   });
+
+  it("мульти-аутпут: план кадра для ВЫБРАННОГО выхода (его mapVideo-ветка)", () => {
+    // in → a(scale) → out1; in → b(scale) → out2 — у выходов разные ветки/лейблы
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("a", "filter", "scale", { preset: "Свои размеры", width: 1920, height: -2 }),
+        node("b", "filter", "scale", { preset: "Свои размеры", width: 640, height: -2 }),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "a"), edge("in", "b"), edge("a", "out1"), edge("b", "out2")],
+    };
+    const paths = new Map([["in", "input.mp4"]]);
+    const p1 = previewPlan(graph, paths, "out1");
+    const p2 = previewPlan(graph, paths, "out2");
+    expect(p1?.kind).toBe("complex");
+    expect(p2?.kind).toBe("complex");
+    if (p1?.kind !== "complex" || p2?.kind !== "complex") return;
+    // Разные выходы → разные mapVideo (каждый мапит свою ветку), filter_complex общий
+    expect(p1.spec.mapVideo).not.toBe(p2.spec.mapVideo);
+    expect(p1.spec.filterComplex).toContain("split");
+  });
 });
 
 describe("previewMoment (N-012)", () => {

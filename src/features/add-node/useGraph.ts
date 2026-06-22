@@ -11,10 +11,12 @@ import {
   type Connection,
 } from "@xyflow/react";
 import type { FilterDef } from "../../shared/lib/ffmpeg/catalog";
+import { getFilterDef } from "../../shared/lib/ffmpeg/catalog";
 import type { Graph, GraphNode, ParamValue } from "../../shared/types/graph";
 import type { MediaInfo } from "../../shared/types/media";
 import { generateCommand } from "../../shared/lib/ffmpeg/generate";
 import { predictOutput } from "../../shared/lib/ffmpeg/predict";
+import type { PresetStep } from "../../shared/lib/project/preset";
 import { bridgesOnDelete, applyBridges } from "./relink";
 import { pickInputFile, probeMedia } from "../../shared/api/tauri";
 import type { FilterNodeData } from "../../widgets/NodeCanvas/nodes/FilterNode";
@@ -61,6 +63,9 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
       const newId = crypto.randomUUID();
       const defaults: Record<string, ParamValue> = {};
       for (const p of def.params) if (p.default !== undefined) defaults[p.id] = p.default;
+      // Дефолты из метаданных входа (если файл выбран) — поверх статичных. Берём info на
+      // момент ДОБАВЛЕНИЯ ноды; смена файла позже уже добавленные ноды не пересчитывает.
+      if (info && def.defaultsFromInfo) Object.assign(defaults, def.defaultsFromInfo(info));
 
       const data: FilterNodeData = {
         label: def.label,
@@ -99,7 +104,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
         ];
       });
     },
-    [setNodes, setEdges, onParamChange],
+    [setNodes, setEdges, onParamChange, info],
   );
 
   // Выбрать файл для ДОПОЛНИТЕЛЬНОГО входа (multi-input): диалог → ffprobe → пишем в data ноды.
@@ -119,6 +124,122 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
       );
     },
     [setNodes],
+  );
+
+  // Добавить дополнительный ВЫХОД (мульти-аутпут, Спринт 3): один вход → N выходов.
+  // Новая output-нода кладётся на холст БЕЗ авто-рёбер — пользователь сам тянет в неё ветку
+  // (как доп. входы). Основной выход (OUTPUT_ID) неудаляем; дополнительные — deletable.
+  const addOutputNode = useCallback(() => {
+    const newId = crypto.randomUUID();
+    setNodes((prev) => {
+      const outputCount = prev.filter((n) => n.type === "output-file").length;
+      const node: Node = {
+        id: newId,
+        type: "output-file",
+        position: { x: 560, y: 360 + (outputCount - 1) * 140 },
+        // info заполнит predict/рендер; deletable — доп. выход можно удалить
+        data: { info: null },
+        deletable: true,
+      };
+      return [...prev, node];
+    });
+  }, [setNodes]);
+
+  // Загрузить граф из открытого проекта: заменяем ноды/рёбра целиком и ДОКЛЕИВАЕМ обратно
+  // рантайм-поля, которые не сохранялись в файл (Спринт 4). У фильтр/merge-нод — onParamChange;
+  // у дополнительных входов (deletable input с path) — onChoose+nodeId (как в addInputNode),
+  // чтобы на ноде работала кнопка «Сменить файл»; info ставим null (пересчитается predict'ом).
+  // Основной вход (id INPUT_ID) восстанавливается отдельно — его путь идёт через useInputFile.
+  const loadGraph = useCallback(
+    (loadedNodes: Node[], loadedEdges: Edge[]) => {
+      const hydrated = loadedNodes.map((n) => {
+        if (n.type === "filter" || n.type === "merge") {
+          const d = n.data as Partial<FilterNodeData>;
+          // label берём из каталога по filterId (актуальное человеческое имя операции)
+          const def = d.filterId ? getFilterDef(d.filterId) : undefined;
+          return {
+            ...n,
+            data: {
+              ...d,
+              label: def?.label ?? d.filterId ?? "",
+              onParamChange,
+              params: d.params ?? {},
+            } as FilterNodeData,
+          };
+        }
+        if (n.type === "input-file" && n.id !== INPUT_ID) {
+          const d = n.data as Partial<InputNodeData>;
+          return {
+            ...n,
+            data: { info: null, path: d.path ?? null, onChoose: chooseInputFile, nodeId: n.id } as InputNodeData,
+          };
+        }
+        // основной вход / выходы — info заполнит predict
+        return { ...n, data: { ...n.data, info: null } };
+      });
+      // Инвариант «основной вход/выход неудаляемы» восстанавливаем принудительно, не доверяя
+      // deletable из файла (подменённый проект мог снять флаг). Основной вход — id INPUT_ID;
+      // основной выход — первая по порядку output-нода (как и при обычной работе).
+      const firstOutputId = hydrated.find((n) => n.type === "output-file")?.id;
+      const guarded = hydrated.map((n) => {
+        if (n.id === INPUT_ID || n.id === firstOutputId) return { ...n, deletable: false };
+        return n;
+      });
+      setNodes(guarded);
+      setEdges(loadedEdges);
+    },
+    [setNodes, setEdges, onParamChange, chooseInputFile],
+  );
+
+  // Применить пресет к выходу (Спринт 4, пункт 3): создаёт фильтр-ноды из шагов пресета
+  // (новые id) цепочкой и ВСТАВЛЯЕТ их в ветку указанного выхода — между его текущим
+  // предшественником и самой выходной нодой. outputId по умолчанию — основной выход.
+  // Пресет file-agnostic: только операции+params, входы не трогаем.
+  const applyPreset = useCallback(
+    (steps: PresetStep[], outputId: string = OUTPUT_ID) => {
+      if (steps.length === 0) return;
+      // Защита от гонки: выбранный выход мог исчезнуть, пока пресет читался с диска (async).
+      // Применяем только если outputId ещё существует — иначе создали бы рёбра в мёртвый узел.
+      if (!nodes.some((n) => n.id === outputId && n.type === "output-file")) return;
+      // Заранее генерируем id для каждого шага — нужны и для нод, и для рёбер
+      const ids = steps.map(() => crypto.randomUUID());
+
+      setNodes((prev) => {
+        const count = prev.filter((n) => n.type === "filter" || n.type === "merge").length;
+        const newNodes: Node[] = steps.map((step, i) => {
+          const def = getFilterDef(step.filterId);
+          const data: FilterNodeData = {
+            label: def?.label ?? step.filterId,
+            filterId: step.filterId,
+            params: { ...step.params },
+            onParamChange,
+          };
+          return {
+            id: ids[i],
+            type: "filter",
+            position: { x: 280, y: 80 + (count + i) * 110 },
+            data,
+          };
+        });
+        return [...prev, ...newNodes];
+      });
+
+      // Перецепить ветку выхода: предшественник выхода → первый шаг; шаги цепочкой;
+      // последний шаг → выход. Если в выход ничего не вело — тянем от основного входа.
+      setEdges((prev) => {
+        const toOutput = prev.find((e) => e.target === outputId);
+        const rest = prev.filter((e) => e.target !== outputId);
+        const head = toOutput?.source ?? INPUT_ID;
+        const chain: Edge[] = [];
+        chain.push({ id: `${head}-${ids[0]}`, source: head, target: ids[0] });
+        for (let i = 0; i < ids.length - 1; i++) {
+          chain.push({ id: `${ids[i]}-${ids[i + 1]}`, source: ids[i], target: ids[i + 1] });
+        }
+        chain.push({ id: `${ids[ids.length - 1]}-${outputId}`, source: ids[ids.length - 1], target: outputId });
+        return [...rest, ...chain];
+      });
+    },
+    [nodes, setNodes, setEdges, onParamChange],
   );
 
   // Добавить дополнительный вход (для overlay/concat). Файл выбирается на самой ноде.
@@ -264,38 +385,53 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     return map;
   }, [nodes, inputPath]);
 
-  // Предсказанные характеристики результата — пересчитываются на лету из графа и входов
+  // Предсказание ПО КАЖДОМУ выходу (мульти-аутпут: у выходов разные ветки → разные
+  // характеристики). Ключ — id output-ноды. predictOutput считает по ветке этого выхода.
+  const predictedByOutput = useMemo(() => {
+    const map = new Map<string, MediaInfo | null>();
+    for (const n of nodes) {
+      if (n.type !== "output-file") continue;
+      map.set(n.id, predictOutput(graph, info ?? null, inputInfos, n.id));
+    }
+    return map;
+  }, [nodes, graph, info, inputInfos]);
+
+  // Предсказание основного/первого выхода — для панели «До/После» (обратная совместимость).
   const predictedOutput = useMemo(
-    () => predictOutput(graph, info ?? null, inputInfos),
-    [graph, info, inputInfos],
+    () => predictedByOutput.get(OUTPUT_ID) ?? predictOutput(graph, info ?? null, inputInfos),
+    [predictedByOutput, graph, info, inputInfos],
   );
 
-  // Синхронизировать характеристики в data стартовых нод (вход — info, выход — предсказание),
-  // чтобы InputNode/OutputNode их отрисовали. По аналогии с onParamChange (пишем в data).
-  // ВАЖНО — защита от зацикливания: setNodes → новый `nodes` → новый useMemo `graph` →
-  //   `predictOutput` отдаёт НОВЫЙ объект с тем же содержимым → эффект снова → setNodes…
-  //   («Maximum update depth exceeded»). Поэтому сравниваем по СОДЕРЖИМОМУ (а не по ссылке):
-  //   если info и предсказание не изменились фактически — возвращаем prev и цикл рвётся.
+  // Синхронизировать характеристики в data нод (вход — info, КАЖДЫЙ выход — предсказание
+  // своей ветки), чтобы InputNode/OutputNode их отрисовали. По аналогии с onParamChange.
+  // ВАЖНО — защита от зацикливания (N-013): setNodes → новый `nodes` → новый `graph` →
+  //   predictOutput отдаёт НОВЫЙ объект с тем же содержимым → эффект снова → setNodes…
+  //   («Maximum update depth exceeded»). Поэтому сравниваем по СОДЕРЖИМОМУ: если ничего
+  //   фактически не изменилось — возвращаем prev и цикл рвётся.
   useEffect(() => {
     setNodes((prev) => {
-      // Только ОСНОВНОЙ вход (INPUT_ID) синхронизируем с info из топбара — у дополнительных
-      // входов свой info (из их собственного ffprobe в chooseInputFile), его не трогаем.
-      const input = prev.find((n) => n.id === INPUT_ID);
-      const output = prev.find((n) => n.type === "output-file");
       const nextInfo = info ?? null;
       const sameContent = (a: unknown, b: unknown) =>
         a === b || JSON.stringify(a) === JSON.stringify(b);
-      const inputSame = sameContent((input?.data as { info?: unknown })?.info, nextInfo);
-      const outputSame = sameContent((output?.data as { info?: unknown })?.info, predictedOutput);
-      // Фактически ничего не изменилось — не создаём новый массив нод (разрывает цикл)
-      if (inputSame && outputSame) return prev;
-      return prev.map((n) => {
-        if (n.id === INPUT_ID) return { ...n, data: { ...n.data, info: nextInfo } };
-        if (n.type === "output-file") return { ...n, data: { ...n.data, info: predictedOutput } };
+      // Считаем, изменилось ли хоть что-то (вход INPUT_ID или любой выход по своей ветке)
+      let changed = false;
+      const next = prev.map((n) => {
+        if (n.id === INPUT_ID) {
+          if (sameContent((n.data as { info?: unknown }).info, nextInfo)) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, info: nextInfo } };
+        }
+        if (n.type === "output-file") {
+          const pred = predictedByOutput.get(n.id) ?? null;
+          if (sameContent((n.data as { info?: unknown }).info, pred)) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, info: pred } };
+        }
         return n;
       });
+      return changed ? next : prev; // ничего не изменилось — рвём цикл
     });
-  }, [info, predictedOutput, setNodes]);
+  }, [info, predictedByOutput, setNodes]);
 
   return {
     nodes,
@@ -307,8 +443,12 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
     onNodesDelete,
     addFilterNode,
     addInputNode,
+    addOutputNode,
+    loadGraph, // загрузка графа из открытого проекта (Спринт 4)
+    applyPreset, // применить пресет к выходу (Спринт 4, пункт 3)
     command,
     predictedOutput,
+    predictedByOutput, // предсказание по каждому выходу (мульти-аутпут: переключатель в панели)
     inputPaths, // пути входов (id → path) — для превью-кадра DAG (usePreviewFrame)
   };
 }

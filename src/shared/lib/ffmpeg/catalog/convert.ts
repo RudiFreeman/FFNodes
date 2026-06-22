@@ -54,6 +54,13 @@ const CODEC_NAME: Record<string, string> = {
   "H.265 / HEVC": "hevc",
   "VP9": "vp9",
 };
+// Обратная карта: имя кодека из ffprobe (info.video_codec) → label опции. Для дефолта
+// «текущий кодек входа». Кодеки вне списка опций (напр. av1, mpeg4) дефолта не дают.
+const CODEC_LABEL: Record<string, string> = {
+  h264: "H.264",
+  hevc: "H.265 / HEVC",
+  vp9: "VP9",
+};
 
 export const changeCodec: FilterDef = {
   id: "codec",
@@ -75,6 +82,12 @@ export const changeCodec: FilterDef = {
     outputArgs: ["-c:v", CODEC_ENCODER[String(p.codec)] ?? "libx264"],
   }),
   streams: { needsVideo: true }, // -c:v перекодирует видео — нужен видеопоток
+  // Дефолт = текущий кодек входа (хедлайн-сценарий: H.264 уже стоит, осталось сменить на H.265).
+  // Кодек вне списка опций (av1…) → дефолта нет, остаётся статичный "H.264".
+  defaultsFromInfo: (info) => {
+    const label = info.video_codec ? CODEC_LABEL[info.video_codec] : undefined;
+    return label ? { codec: label } : {};
+  },
   applyToInfo: (info, p) => {
     const codec = String(p.codec);
     const factor = CODEC_BITRATE_FACTOR[codec] ?? 1.0;

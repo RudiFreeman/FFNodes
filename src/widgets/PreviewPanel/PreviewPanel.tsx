@@ -16,6 +16,12 @@ import {
   basename,
 } from "../../shared/lib/format";
 
+// Один выход для переключателя «После» (мульти-аутпут)
+export interface OutputTab {
+  id: string;
+  label: string;
+}
+
 interface PreviewPanelProps {
   path: string | null;
   info: MediaInfo | null;
@@ -24,7 +30,12 @@ interface PreviewPanelProps {
   outputInfo: MediaInfo | null; // характеристики «После»: предсказание или результат рендера
   rendered: boolean; // true — outputInfo это реальный результат рендера (размер точный, не «≈»)
   frame: PreviewFrameState; // кадры «До»/«После» (usePreviewFrame)
+  dragging: boolean; // над окном тащат файл — показать оверлей «отпусти здесь»
   onChoose: () => void;
+  // Мульти-аутпут: вкладки выходов для «После». Один выход — массив из одного (вкладки скрыты).
+  outputs: OutputTab[];
+  selectedOutputId: string | null;
+  onSelectOutput: (id: string) => void;
 }
 
 // Одна строка характеристики: подпись + как достать значение из MediaInfo.
@@ -92,21 +103,28 @@ export function PreviewPanel({
   outputInfo,
   rendered,
   frame,
+  dragging,
   onChoose,
+  outputs,
+  selectedOutputId,
+  onSelectOutput,
 }: PreviewPanelProps) {
   // «После» отличается от «До» только когда кадр после реально получен и не равен «До»
   const hasAfter = frame.after !== null && frame.after !== frame.before;
+  // Вкладки выходов показываем только при нескольких выходах (мульти-аутпут)
+  const showOutputTabs = outputs.length > 1;
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-surface">
+    <aside className="relative flex w-80 shrink-0 flex-col border-r border-border bg-surface">
       <div className="border-b border-border px-3 py-2 text-xs font-medium uppercase tracking-wide text-fg-muted">
         Превью
       </div>
 
       {!path ? (
-        // Пустое состояние — приглашение выбрать файл
+        // Пустое состояние — приглашение выбрать файл (плюс ошибка, напр. перетащили не-видео)
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
           <FileVideo className="h-10 w-10 text-fg-muted" aria-hidden />
           <p className="text-sm text-fg-muted">Выбери видео, чтобы начать</p>
+          {error && <p className="text-xs text-destructive">{error}</p>}
           <button
             type="button"
             onClick={onChoose}
@@ -142,6 +160,26 @@ export function PreviewPanel({
               <FolderOpen className="h-4 w-4" aria-hidden />
             </button>
           </div>
+
+          {/* Вкладки выходов (мульти-аутпут): какой выход показываем в колонке «После» */}
+          {showOutputTabs && (
+            <div className="flex flex-wrap gap-1 border-b border-border px-3 py-2">
+              {outputs.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => onSelectOutput(o.id)}
+                  className={`rounded px-2 py-1 text-[11px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+                    o.id === selectedOutputId
+                      ? "bg-node-output/20 text-node-output"
+                      : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Метаданные — таблица До/После. Сетка: подпись | До | После (если есть) */}
           <div className="px-3 py-2">
@@ -219,6 +257,15 @@ export function PreviewPanel({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Оверлей при перетаскивании файла над окном. pointer-events-none — чтобы не перехватывать
+          нативное drop-событие Tauri (оно ловится на уровне webview, не через DOM). */}
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-accent bg-bg/80 text-center">
+          <FileVideo className="h-10 w-10 text-accent" aria-hidden />
+          <p className="text-sm font-medium text-accent">Отпусти файл здесь</p>
         </div>
       )}
     </aside>

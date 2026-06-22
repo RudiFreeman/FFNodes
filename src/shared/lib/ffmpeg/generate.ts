@@ -3,8 +3,8 @@
 import type { Graph } from "../../types/graph";
 import { getFilterDef } from "./catalog";
 import { orderedFilters } from "./chain";
-import { isLinearGraph } from "./dag";
-import { buildComplexPlan } from "./complex/build";
+import { isLinearGraph, outputNodes } from "./dag";
+import { buildComplexPlan, buildMultiOutputPlan } from "./complex/build";
 import { isComplexError } from "./complex/types";
 import { validateGraph } from "./validate";
 
@@ -13,10 +13,16 @@ export interface GeneratedCommand {
   display: string; // человекочитаемая команда для показа внизу
   error?: string; // если граф неполон/несочетаем — что именно не так (команду не строим)
   invalidNodeIds?: string[]; // ноды-виновники ошибки валидации (для подсветки на холсте)
+  // Мульти-аутпут (Спринт 3): плейсхолдеры выходных файлов в args (output_0, output_1…),
+  // в порядке выходных секций. useRender спросит save-диалог на каждый и заменит по индексу.
+  // Для одиночного выхода — один элемент (PLACEHOLDER_OUTPUT), как было.
+  outputPlaceholders?: string[];
 }
 
 const PLACEHOLDER_INPUT = "input.mp4";
 const PLACEHOLDER_OUTPUT = "output.mp4";
+// Плейсхолдер выходного файла N-го выхода (мульти-аутпут). Фронт заменит на реальный путь.
+const outputPlaceholder = (i: number) => `output_${i}.mp4`;
 
 // Имя файла из пути для читаемого display (кроссплатформенно). Логика дублирует
 // shared/lib/format.basename, но generate.ts — чистый модуль без зависимостей от UI-утилит.
@@ -31,6 +37,12 @@ function fileName(path: string): string {
 // Линейный граф идёт простым -vf/-af путём (как раньше); DAG (merge-операции, несколько
 // входов, ветвление) — через -filter_complex. Граница — isLinearGraph (см. dag.ts).
 export function generateCommand(graph: Graph, inputPath?: string): GeneratedCommand {
+  // Мульти-аутпут (Спринт 3, Вариант A): несколько выходов — одна команда с N выходными
+  // секциями (-map … out_i). Декод входа один, ветвление через split (см. complex/build).
+  if (outputNodes(graph).length > 1) {
+    return generateMultiOutputCommand(graph, inputPath);
+  }
+
   if (!isLinearGraph(graph)) {
     return generateComplexCommand(graph, inputPath);
   }
@@ -90,7 +102,7 @@ export function generateCommand(graph: Graph, inputPath?: string): GeneratedComm
   parts.push(...outputArgs);
   parts.push(PLACEHOLDER_OUTPUT);
 
-  return { args, display: parts.join(" ") };
+  return { args, display: parts.join(" "), outputPlaceholders: [PLACEHOLDER_OUTPUT] };
 }
 
 // Сборка команды через -filter_complex для DAG-графа (merge-операции, несколько входов).
@@ -128,7 +140,50 @@ function generateComplexCommand(graph: Graph, inputPath?: string): GeneratedComm
   parts.push(...plan.outputArgs);
   parts.push(PLACEHOLDER_OUTPUT);
 
-  return { args, display: parts.join(" ") };
+  return { args, display: parts.join(" "), outputPlaceholders: [PLACEHOLDER_OUTPUT] };
+}
+
+// Сборка команды мульти-аутпута (Вариант A): один вход → N выходов одной командой.
+// -i … -filter_complex "…" (-map vN [-map aN] outputArgs_N OUT_N)×N. Один декод входа,
+// каждый выход — своя секция. Плейсхолдеры выходов (output_0.mp4…) фронт заменит на пути.
+function generateMultiOutputCommand(graph: Graph, inputPath?: string): GeneratedCommand {
+  const inputNodes = graph.nodes.filter((n) => n.kind === "input");
+  const inputPaths = new Map<string, string>();
+  inputNodes.forEach((n, i) => {
+    const fromParams = typeof n.params.path === "string" ? n.params.path : undefined;
+    inputPaths.set(n.id, fromParams ?? (i === 0 ? inputPath ?? PLACEHOLDER_INPUT : PLACEHOLDER_INPUT));
+  });
+
+  const plan = buildMultiOutputPlan(graph, inputPaths);
+  if (isComplexError(plan)) {
+    return { args: [], display: "", error: plan.error, invalidNodeIds: plan.invalidNodeIds };
+  }
+
+  const placeholders = plan.outputs.map((_, i) => outputPlaceholder(i));
+
+  // args: входы → общий -filter_complex → по секции на каждый выход
+  const args: string[] = [];
+  for (const p of plan.inputs) args.push("-i", p);
+  if (plan.filterComplex) args.push("-filter_complex", plan.filterComplex);
+  plan.outputs.forEach((o, i) => {
+    if (o.mapVideo) args.push("-map", refLabel(o.mapVideo));
+    if (o.mapAudio) args.push("-map", refLabel(o.mapAudio));
+    args.push(...o.outputArgs);
+    args.push(placeholders[i]);
+  });
+
+  // display — читаемый вид: короткие имена входов, filter_complex в кавычках, секции выходов
+  const parts = ["ffmpeg"];
+  for (const p of plan.inputs) parts.push("-i", fileName(p));
+  if (plan.filterComplex) parts.push("-filter_complex", `"${plan.filterComplex}"`);
+  plan.outputs.forEach((o, i) => {
+    if (o.mapVideo) parts.push("-map", refLabel(o.mapVideo));
+    if (o.mapAudio) parts.push("-map", refLabel(o.mapAudio));
+    parts.push(...o.outputArgs);
+    parts.push(placeholders[i]);
+  });
+
+  return { args, display: parts.join(" "), outputPlaceholders: placeholders };
 }
 
 // Ссылка на поток в -map: промежуточные лейблы в скобках ([vout]), входные — как есть (0:v).

@@ -1,7 +1,7 @@
 // Тесты обхода DAG и классификатора линейности (dag.ts).
 // Линейные кейсы должны совпадать с orderedFilters (chain.ts) по составу/порядку фильтров.
 import { describe, it, expect } from "vitest";
-import { topoSort, isLinearGraph, incomingEdges, outgoingEdges } from "./dag";
+import { topoSort, isLinearGraph, incomingEdges, outgoingEdges, outputNodes } from "./dag";
 import { orderedFilters } from "./chain";
 import type { Graph, GraphNode, GraphEdge, ParamValue } from "../../types/graph";
 
@@ -126,6 +126,40 @@ describe("topoSort", () => {
     expect(topoSort(graph)).toBeNull();
   });
 
+  it("мульти-аутпут: один вход → два выхода (split) → топо-обход всех нод", () => {
+    // in → a; in → b; a → out1; b → out2 (один вход, две ветки, два выхода)
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("a", "filter", "scale"),
+        node("b", "filter", "scale"),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "a"), edge("in", "b"), edge("a", "out1"), edge("b", "out2")],
+    };
+    const topo = topoSort(graph);
+    expect(topo).not.toBeNull();
+    expect(topo).toHaveLength(5);
+    const order = topo!.map((n) => n.id);
+    expect(order.indexOf("a")).toBeLessThan(order.indexOf("out1"));
+    expect(order.indexOf("b")).toBeLessThan(order.indexOf("out2"));
+  });
+
+  it("мульти-аутпут: висящий доп. выход без ветки → null", () => {
+    // in → a → out1; out2 ни из чего не достижим (добавлен, но не подключён)
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("a", "filter", "scale"),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "a"), edge("a", "out1")],
+    };
+    expect(topoSort(graph)).toBeNull();
+  });
+
   it("один из двух входов не доходит до output → null", () => {
     // in1 → out; in2 висит (его ветка не ведёт к output)
     const graph: Graph = {
@@ -156,6 +190,20 @@ describe("isLinearGraph", () => {
       edges: [edge("in", "out")],
     };
     expect(isLinearGraph(graph)).toBe(true);
+  });
+
+  it("два выхода (мульти-аутпут) → false", () => {
+    const graph: Graph = {
+      nodes: [
+        node("in", "input"),
+        node("a", "filter", "scale"),
+        node("b", "filter", "scale"),
+        node("out1", "output"),
+        node("out2", "output"),
+      ],
+      edges: [edge("in", "a"), edge("in", "b"), edge("a", "out1"), edge("b", "out2")],
+    };
+    expect(isLinearGraph(graph)).toBe(false);
   });
 
   it("два входа → false", () => {
@@ -200,6 +248,24 @@ describe("isLinearGraph", () => {
       edges: [edge("in", "g"), edge("g", "out")],
     };
     expect(isLinearGraph(graph)).toBe(false);
+  });
+});
+
+describe("outputNodes", () => {
+  it("один выход", () => {
+    const graph: Graph = {
+      nodes: [node("in", "input"), node("a", "filter", "scale"), node("out", "output")],
+      edges: [edge("in", "a"), edge("a", "out")],
+    };
+    expect(outputNodes(graph).map((n) => n.id)).toEqual(["out"]);
+  });
+
+  it("несколько выходов — в порядке graph.nodes", () => {
+    const graph: Graph = {
+      nodes: [node("in", "input"), node("out1", "output"), node("out2", "output")],
+      edges: [edge("in", "out1"), edge("in", "out2")],
+    };
+    expect(outputNodes(graph).map((n) => n.id)).toEqual(["out1", "out2"]);
   });
 });
 

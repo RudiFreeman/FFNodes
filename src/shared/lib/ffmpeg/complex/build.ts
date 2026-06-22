@@ -4,9 +4,9 @@
 // фрагмент сама через MergeSpec.toComplex. См. complex/types.ts, dag.ts, docs/ARCHITECTURE.md.
 import type { Graph, GraphNode } from "../../../types/graph";
 import { getFilterDef } from "../catalog";
-import { topoSort, incomingEdges } from "../dag";
-import type { ComplexResult, StreamLabel } from "./types";
-import { makeLabeler, inputLabel, bracket } from "./labels";
+import { topoSort, incomingEdges, outgoingEdges, outputNodes } from "../dag";
+import type { ComplexResult, MultiOutputResult, OutputPlan, StreamLabel } from "./types";
+import { makeLabeler, inputLabel, bracket, splitFragment } from "./labels";
 
 // Лейблы потоков НА ВЫХОДЕ ноды: что отдаёт нода дальше по графу.
 // null означает «потока нет» (напр. видео после извлечения аудио).
@@ -153,4 +153,206 @@ function predecessorStreams(
   const incoming = incomingEdges(graph, nodeId);
   if (incoming.length === 0) return null;
   return streams.get(incoming[0].source) ?? null;
+}
+
+// =========================================================================================
+// Мульти-аутпут (Спринт 3, Вариант A): один вход → N выходов одной командой.
+// Один декод входа, поток ветвится через split на N выходных секций. Ключевая сложность:
+// в filter_complex каждый лейбл потребляется РОВНО один раз — поэтому поток, который кормит
+// несколько потребителей (несколько фильтр-веток или несколько выходов), надо размножить
+// через split/asplit. См. complex/labels.ts (splitFragment), docs/ARCHITECTURE.md.
+// =========================================================================================
+
+// Сколько РАЗ поток ноды (видео/аудио) читается ниже по графу. Считаем по рёбрам:
+// каждое исходящее ребро ноды — один потребитель её потоков. Если >1 — нужен split.
+interface UseCount {
+  v: number;
+  a: number;
+}
+
+export function buildMultiOutputPlan(
+  graph: Graph,
+  inputPaths: Map<string, string>,
+): MultiOutputResult {
+  const ordered = topoSort(graph);
+  if (ordered === null) {
+    return { error: "Соедини ноды: вход → фильтры → выход" };
+  }
+
+  const labeler = makeLabeler();
+  const streams = new Map<string, NodeStreams>(); // выходные лейблы каждой ноды
+  const fragments: string[] = [];
+  const inputs: string[] = [];
+
+  // Каждая нода может ветвиться: для лейбла, читаемого N>1 раз, заводим split-ветки и
+  // раздаём по одной каждому потребителю. branchQueues: nodeId → очередь готовых веток.
+  const useCount = countUses(graph, ordered);
+  const branchQueues = new Map<string, { v: StreamLabel[]; a: StreamLabel[] }>();
+
+  // Взять очередную ветку потока ноды (видео/аудио) для одного потребителя. Если поток
+  // читается единожды — отдаём сам лейбл; если несколько раз — поочерёдно ветки split.
+  const takeBranch = (nodeId: string, kind: "v" | "a"): StreamLabel | null => {
+    const s = streams.get(nodeId);
+    const base = s ? s[kind] : null;
+    if (base === null) return null;
+    const count = useCount.get(nodeId)?.[kind] ?? 0;
+    if (count <= 1) return base; // один потребитель — split не нужен
+    let q = branchQueues.get(nodeId);
+    if (!q) {
+      q = { v: [], a: [] };
+      branchQueues.set(nodeId, q);
+    }
+    if (q[kind].length === 0) {
+      // Впервые понадобилась ветка — создаём split на нужное число потребителей
+      const branches = Array.from({ length: count }, () =>
+        kind === "v" ? labeler.nextVideo() : labeler.nextAudio(),
+      );
+      fragments.push(splitFragment(base, branches, kind));
+      q[kind] = branches;
+    }
+    return q[kind].shift() ?? base;
+  };
+
+  for (const node of ordered) {
+    if (node.kind === "input") {
+      const idx = inputs.length;
+      const path = inputPaths.get(node.id);
+      if (!path) return { error: "Вход без выбранного файла", invalidNodeIds: [node.id] };
+      inputs.push(path);
+      streams.set(node.id, { v: inputLabel(idx, "v"), a: inputLabel(idx, "a") });
+      continue;
+    }
+    if (node.kind === "output") continue;
+
+    const def = node.filterId ? getFilterDef(node.filterId) : undefined;
+    if (!def) {
+      return { error: `Неизвестный фильтр: ${node.filterId}`, invalidNodeIds: [node.id] };
+    }
+
+    // Входные потоки ноды — берём ВЕТКИ предшественников (split, если те ветвятся),
+    // упорядоченные по targetHandle (для merge важен порядок основной/накладка). Аудио
+    // НЕ запрашиваем у merge без audioInputs (overlay) — иначе вытянули бы ветку asplit,
+    // которую этот узел не использует (должно совпадать с countUses, см. consumesNoAudio).
+    const wantsAudio = !consumesNoAudio(node);
+    const incoming = orderedIncomingBranches(graph, node.id, takeBranch, wantsAudio);
+    if (incoming === null) {
+      return { error: `Не хватает входа для «${def.label}»`, invalidNodeIds: [node.id] };
+    }
+
+    if (def.merge) {
+      const vIn = incoming.map((s) => s.v).filter((l): l is string => l !== null);
+      const aIn = incoming.map((s) => s.a).filter((l): l is string => l !== null);
+      const vOut = labeler.nextVideo();
+      const aOut = def.merge.audioInputs ? labeler.nextAudio() : undefined;
+      fragments.push(def.merge.toComplex({ vIn, aIn, vOut, aOut, params: node.params }));
+      streams.set(node.id, { v: vOut, a: aOut ?? null });
+      continue;
+    }
+
+    const prev = incoming[0];
+    const contrib = def.toCommand(node.params);
+    let vOut = prev.v;
+    if (contrib.vf && prev.v) {
+      vOut = labeler.nextVideo();
+      fragments.push(`${bracket(prev.v)}${contrib.vf}${bracket(vOut)}`);
+    }
+    streams.set(node.id, { v: vOut, a: prev.a });
+  }
+
+  // По выходу: поднимаемся к предшественнику и берём его ВЕТКУ + собираем outputArgs веток,
+  // ведущих именно к этому выходу. Порядок выходов = порядок outputNodes графа.
+  const outputs: OutputPlan[] = [];
+  for (const out of outputNodes(graph)) {
+    const incoming = incomingEdges(graph, out.id);
+    if (incoming.length === 0) return { error: "Цепочка не доходит до выхода", invalidNodeIds: [out.id] };
+    const srcId = incoming[0].source;
+    outputs.push({
+      nodeId: out.id,
+      mapVideo: takeBranch(srcId, "v"),
+      mapAudio: takeBranch(srcId, "a"),
+      outputArgs: collectOutputArgs(graph, out.id),
+    });
+  }
+
+  return { inputs, filterComplex: fragments.join(";"), outputs };
+}
+
+// Посчитать, сколько раз поток (видео/аудио) каждой ноды читается ниже по графу.
+// Считаем ПО ПОТРЕБИТЕЛЮ ребра, а не вслепую по числу рёбер: важно не насчитать лишнее
+// аудио-потребление там, где потребитель аудио НЕ берёт — иначе takeBranch создаст лишнюю
+// ветку asplit, которую никто не прочитает (ffmpeg: «output pad not connected»).
+//   • output (приёмник) — мапит и видео, и аудио источника → читает оба;
+//   • merge-операция — видео читает всегда; аудио ТОЛЬКО если merge.audioInputs задан
+//     (overlay аудио накладки не берёт → его asplit был бы орфаном);
+//   • обычный фильтр — аудио проходит насквозь (читается), видео тоже.
+function countUses(graph: Graph, ordered: GraphNode[]): Map<string, UseCount> {
+  const counts = new Map<string, UseCount>();
+  for (const n of ordered) counts.set(n.id, { v: 0, a: 0 });
+  const byId = new Map(ordered.map((n) => [n.id, n]));
+  for (const n of ordered) {
+    if (n.kind === "output") continue;
+    const c = counts.get(n.id)!;
+    for (const e of outgoingEdges(graph, n.id)) {
+      const target = byId.get(e.target);
+      c.v += 1; // видео потребляют все потребители (output/фильтр/merge)
+      // Аудио НЕ потребляет merge-операция без audioInputs (overlay): её asplit стал бы орфаном
+      const dropsAudio = consumesNoAudio(target);
+      if (!dropsAudio) c.a += 1;
+    }
+  }
+  return counts;
+}
+
+// Потребитель НЕ берёт аудио источника? Так у merge без audioInputs (overlay): он строит
+// фрагмент только из видеовходов, аудио предшественника не использует. Прочие (output,
+// обычный фильтр, concat с audioInputs) аудио потребляют.
+function consumesNoAudio(node: GraphNode | undefined): boolean {
+  if (!node || node.kind !== "filter" || !node.filterId) return false;
+  const def = getFilterDef(node.filterId);
+  return def?.merge != null && !def.merge.audioInputs;
+}
+
+// Входные ветки ноды, упорядоченные по targetHandle (как orderedIncomingStreams, но берёт
+// split-ветку через takeBranch вместо общего лейбла). null — если предшественник не построен.
+// wantsAudio=false — узел аудио не потребляет (merge без audioInputs): ветку asplit не тянем
+// (иначе осталась бы неподключённой), a=null.
+function orderedIncomingBranches(
+  graph: Graph,
+  nodeId: string,
+  takeBranch: (nodeId: string, kind: "v" | "a") => StreamLabel | null,
+  wantsAudio: boolean,
+): NodeStreams[] | null {
+  const incoming = incomingEdges(graph, nodeId);
+  if (incoming.length === 0) return null;
+  const sorted = [...incoming].sort((a, b) => {
+    const ha = a.targetHandle ?? "￿";
+    const hb = b.targetHandle ?? "￿";
+    return ha < hb ? -1 : ha > hb ? 1 : 0;
+  });
+  return sorted.map((e) => ({
+    v: takeBranch(e.source, "v"),
+    a: wantsAudio ? takeBranch(e.source, "a") : null,
+  }));
+}
+
+// Собрать outputArgs ветки, ведущей к данному выходу: поднимаемся по основным входящим
+// рёбрам от выхода до входа, складывая outputArgs каждой filter-ноды на пути. Так у каждого
+// выхода свои кодеки/-f (напр. один выход H.264, другой H.265), заданные нодами его ветки.
+function collectOutputArgs(graph: Graph, outputId: string): string[] {
+  const args: string[] = [];
+  const seen = new Set<string>();
+  let cur: string | undefined = incomingEdges(graph, outputId)[0]?.source;
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const node = graph.nodes.find((n) => n.id === cur);
+    if (!node) break;
+    if (node.kind === "input") break;
+    if (node.filterId) {
+      const def = getFilterDef(node.filterId);
+      const extra = def?.toCommand(node.params).outputArgs;
+      if (extra) args.unshift(...extra); // ближе к входу — раньше в команде
+    }
+    cur = incomingEdges(graph, cur)[0]?.source;
+  }
+  return args;
 }

@@ -2,22 +2,36 @@
 // группы-аккордеоны (по умолчанию свёрнуты). Звёздочки — как эффекты в Premiere.
 // См. docs/ARCHITECTURE.md §3, docs/UI.md §4.
 import { useMemo, useState } from "react";
-import { Search, ChevronDown, ChevronRight, Star, FilePlus } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Star, FilePlus, FileOutput } from "lucide-react";
 import { catalogByCategory, CATALOG, type FilterDef } from "../../shared/lib/ffmpeg/catalog";
 import { CatalogItem } from "./CatalogItem";
+import { PresetBar } from "./PresetBar";
 
 interface FilterCatalogProps {
   onAddFilter: (def: FilterDef) => void;
   onAddInput: () => void; // добавить дополнительный вход (multi-input: overlay/concat)
+  onAddOutput: () => void; // добавить дополнительный выход (мульти-аутпут: 1 вход → N выходов)
   isFavorite: (id: string) => boolean;
   onToggleFavorite: (id: string) => void;
+  // Пресеты выходной ветки (Спринт 4, пункт 3)
+  presetNames: string[];
+  presetError: string | null;
+  onApplyPreset: (name: string) => void;
+  onSavePreset: (name: string) => void;
+  onDeletePreset: (name: string) => void;
 }
 
 export function FilterCatalog({
   onAddFilter,
   onAddInput,
+  onAddOutput,
   isFavorite,
   onToggleFavorite,
+  presetNames,
+  presetError,
+  onApplyPreset,
+  onSavePreset,
+  onDeletePreset,
 }: FilterCatalogProps) {
   const [query, setQuery] = useState("");
   // Развёрнутые категории. По умолчанию ВСЕ свёрнуты (функций много) — пустое множество.
@@ -69,17 +83,35 @@ export function FilterCatalog({
         Каталог функций
       </div>
 
-      {/* Добавить вход — для наложения (overlay) и склейки (concat): нужен второй файл */}
-      <div className="border-b border-border p-2">
+      {/* Добавить вход — для наложения (overlay) и склейки (concat): нужен второй файл.
+          Добавить выход — мульти-аутпут: один вход → несколько выходных файлов (Спринт 3). */}
+      <div className="flex gap-2 border-b border-border p-2">
         <button
           type="button"
           onClick={onAddInput}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-node-input/60 px-2.5 py-1.5 text-sm text-fg hover:bg-node-input/10"
+          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-node-input/60 px-2.5 py-1.5 text-sm text-fg hover:bg-node-input/10"
         >
           <FilePlus className="h-4 w-4 text-node-input" aria-hidden />
-          Добавить вход
+          Вход
+        </button>
+        <button
+          type="button"
+          onClick={onAddOutput}
+          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-node-output/60 px-2.5 py-1.5 text-sm text-fg hover:bg-node-output/10"
+        >
+          <FileOutput className="h-4 w-4 text-node-output" aria-hidden />
+          Выход
         </button>
       </div>
+
+      {/* Пресеты выходной ветки (Спринт 4): применить к выбранному выходу / сохранить */}
+      <PresetBar
+        names={presetNames}
+        error={presetError}
+        onApply={onApplyPreset}
+        onSave={onSavePreset}
+        onDelete={onDeletePreset}
+      />
 
       {/* Поиск */}
       <div className="border-b border-border p-2">
@@ -102,7 +134,7 @@ export function FilterCatalog({
             <button
               type="button"
               onClick={() => setFavOpen((v) => !v)}
-              className="flex w-full items-center gap-1 rounded px-1 py-1 text-xs font-medium text-accent transition-colors hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-ring"
+              className="flex w-full items-center gap-1 rounded py-1.5 pl-0.5 pr-1 text-xs font-semibold uppercase tracking-wide text-accent transition-colors hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {searching || favOpen ? (
                 <ChevronDown className="h-3.5 w-3.5" aria-hidden />
@@ -111,7 +143,7 @@ export function FilterCatalog({
               )}
               <Star className="h-3.5 w-3.5 fill-accent" aria-hidden />
               Избранное
-              <span className="ml-auto text-fg-muted">{favoriteItems.length}</span>
+              <span className="ml-auto font-normal text-fg-muted">{favoriteItems.length}</span>
             </button>
             {(searching || favOpen) &&
               favoriteItems.map((def) => (
@@ -135,30 +167,38 @@ export function FilterCatalog({
           const isOpen = searching || expanded.has(g.category);
           return (
             <div key={g.category} className="mb-1">
+              {/* Заголовок группы — «оглавление»: главнее пунктов (полужирный, светлее,
+                  uppercase), чтобы вложенные пункты под ним читались как подчинённые. */}
               <button
                 type="button"
                 onClick={() => toggle(g.category)}
-                className="flex w-full items-center gap-1 rounded px-1 py-1 text-xs font-medium text-fg-muted transition-colors hover:text-fg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="flex w-full items-center gap-1 rounded py-1.5 pl-0.5 pr-1 text-xs font-semibold uppercase tracking-wide text-fg transition-colors hover:text-fg focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {isOpen ? (
-                  <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                  <ChevronDown className="h-3.5 w-3.5 text-fg-muted" aria-hidden />
                 ) : (
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                  <ChevronRight className="h-3.5 w-3.5 text-fg-muted" aria-hidden />
                 )}
                 {g.category}
-                <span className="ml-auto text-fg-muted">{g.items.length}</span>
+                <span className="ml-auto font-normal text-fg-muted">{g.items.length}</span>
               </button>
 
-              {isOpen &&
-                g.items.map((def) => (
-                  <CatalogItem
-                    key={def.id}
-                    def={def}
-                    isFavorite={isFavorite(def.id)}
-                    onAdd={onAddFilter}
-                    onToggleFavorite={onToggleFavorite}
-                  />
-                ))}
+              {/* Только пункты — на более тёмном фоне (панель под заголовком раздела).
+                  Сам заголовок остаётся снаружи, на обычном фоне. Панель тянется до краёв
+                  каталога: -mx-2 гасит p-2 контейнера, px-2 возвращает отступ тексту. */}
+              {isOpen && (
+                <div className="-mx-2 bg-bg/40 px-2 py-0.5">
+                  {g.items.map((def) => (
+                    <CatalogItem
+                      key={def.id}
+                      def={def}
+                      isFavorite={isFavorite(def.id)}
+                      onAdd={onAddFilter}
+                      onToggleFavorite={onToggleFavorite}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
