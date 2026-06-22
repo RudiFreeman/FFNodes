@@ -34,7 +34,7 @@ export function TopBar({
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface px-4">
       <div className="flex items-center gap-2">
         <Clapperboard className="h-5 w-5 text-accent" aria-hidden />
-        <span className="text-sm font-semibold">FFmpeg Visual</span>
+        <span className="text-sm font-semibold">FFNodes</span>
         <span className="ml-3 text-sm text-fg-muted">{projectName ?? "проект без названия"}</span>
       </div>
 

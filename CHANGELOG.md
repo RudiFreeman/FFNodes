@@ -1,8 +1,20 @@
-# Changelog — FFmpeg Visual
+# Changelog — FFNodes
 
 История завершённых этапов. Формат: обратная хронология (новое сверху).
 
 ## [Не выпущено]
+
+### Переименование в FFNodes
+- **Продукт переименован «FFmpeg Visual» → FFNodes** (англ.: "FFNodes — a visual,
+  node-based editor for FFmpeg"). Сменено только видимое имя: шапка TopBar, заголовок
+  окна (`tauri.conf.json` productName/title), `index.html`, README, карты документации.
+- **Внутренние идентификаторы НЕ тронуты намеренно** (чтобы не сломать сохранённые данные
+  и capabilities): `package.json`/Cargo crate `ffmpeg-visual`, bundle id
+  `com.aleksei.ffmpeg-visual`, scope временных кадров `ffmpeg-visual-frame-*`, расширение
+  проекта `.ffvproj`.
+- **README переоформлен:** добавлена строка-описание, секция со скриншотом главного окна
+  (`docs/assets/screenshot-main.png`), актуализирован статус (рабочий рендер, 29 операций,
+  DAG, мульти-аутпут, проекты/пресеты) вместо устаревшего «ранняя стадия, каркаса нет».
 
 ### Спринт 4 — сохранение/загрузка проекта + пресеты
 - **Файл проекта `.ffvproj`.** Всё состояние холста (вход + все выходы + их настройки)
