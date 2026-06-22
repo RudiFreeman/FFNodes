@@ -177,7 +177,15 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
         // основной вход / выходы — info заполнит predict
         return { ...n, data: { ...n.data, info: null } };
       });
-      setNodes(hydrated);
+      // Инвариант «основной вход/выход неудаляемы» восстанавливаем принудительно, не доверяя
+      // deletable из файла (подменённый проект мог снять флаг). Основной вход — id INPUT_ID;
+      // основной выход — первая по порядку output-нода (как и при обычной работе).
+      const firstOutputId = hydrated.find((n) => n.type === "output-file")?.id;
+      const guarded = hydrated.map((n) => {
+        if (n.id === INPUT_ID || n.id === firstOutputId) return { ...n, deletable: false };
+        return n;
+      });
+      setNodes(guarded);
       setEdges(loadedEdges);
     },
     [setNodes, setEdges, onParamChange, chooseInputFile],
@@ -190,6 +198,9 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
   const applyPreset = useCallback(
     (steps: PresetStep[], outputId: string = OUTPUT_ID) => {
       if (steps.length === 0) return;
+      // Защита от гонки: выбранный выход мог исчезнуть, пока пресет читался с диска (async).
+      // Применяем только если outputId ещё существует — иначе создали бы рёбра в мёртвый узел.
+      if (!nodes.some((n) => n.id === outputId && n.type === "output-file")) return;
       // Заранее генерируем id для каждого шага — нужны и для нод, и для рёбер
       const ids = steps.map(() => crypto.randomUUID());
 
@@ -228,7 +239,7 @@ export function useGraph(inputPath?: string | null, info?: MediaInfo | null) {
         return [...rest, ...chain];
       });
     },
-    [setNodes, setEdges, onParamChange],
+    [nodes, setNodes, setEdges, onParamChange],
   );
 
   // Добавить дополнительный вход (для overlay/concat). Файл выбирается на самой ноде.

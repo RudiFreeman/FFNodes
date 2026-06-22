@@ -35,11 +35,6 @@ export function readProjectFile(path: string): Promise<string> {
   return invoke<string>("read_project_file", { path });
 }
 
-// Существует ли файл (мягкая проверка входов при открытии проекта).
-export function pathExists(path: string): Promise<boolean> {
-  return invoke<boolean>("path_exists", { path });
-}
-
 // --- Пресеты (в app-config/presets) ---
 export function writePreset(name: string, contents: string): Promise<void> {
   return invoke("write_preset", { name, contents });

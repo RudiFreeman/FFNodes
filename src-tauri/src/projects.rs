@@ -30,13 +30,6 @@ pub fn read_project_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Не удалось открыть проект: {e}"))
 }
 
-// Проверить, существует ли файл по пути (мягкая проверка входов при открытии проекта:
-// файл мог переехать/удалиться — это не ошибка, фронт лишь пометит вход «не найден»).
-#[tauri::command]
-pub fn path_exists(path: String) -> bool {
-    PathBuf::from(&path).is_file()
-}
-
 // --- Пресеты (хранятся в app-config/presets/<имя>.json) ---
 
 // Сохранить пресет. name санируется (без разделителей/«..») — защита от path traversal.
@@ -160,23 +153,6 @@ mod tests {
     fn read_missing_project_is_error() {
         let err = read_project_file("/nope/does-not-exist.ffvproj".to_string());
         assert!(err.is_err());
-    }
-
-    #[test]
-    fn path_exists_detects_file() {
-        let mut path = std::env::temp_dir();
-        path.push(format!(
-            "ffv-exists-{}.txt",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let p = path.to_string_lossy().to_string();
-        assert!(!path_exists(p.clone())); // ещё нет
-        fs::write(&p, "x").unwrap();
-        assert!(path_exists(p.clone())); // появился
-        let _ = fs::remove_file(&p);
     }
 
     #[test]

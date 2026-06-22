@@ -7,6 +7,7 @@
 
 import type { Node, Edge } from "@xyflow/react";
 import { PROJECT_FORMAT, PROJECT_VERSION, type ProjectNodeType } from "./project";
+import { safePath } from "../ffmpeg/safePath";
 
 // Допустимые типы нод (см. NodeCanvas.tsx nodeTypes).
 const NODE_TYPES: ReadonlySet<ProjectNodeType> = new Set<ProjectNodeType>([
@@ -77,7 +78,8 @@ export function deserializeProject(raw: unknown): DeserializeResult {
     if (edge) edges.push(edge);
   }
 
-  const inputPath = typeof raw.inputPath === "string" ? raw.inputPath : null;
+  // 🔒 N-004: путь основного входа из недоверенного файла тоже через safePath (см. выше)
+  const inputPath = typeof raw.inputPath === "string" ? safePath(raw.inputPath) : null;
 
   return { nodes, edges, inputPath, warnings };
 }
@@ -104,7 +106,10 @@ function parseNode(item: unknown, warnings: string[]): Node | null {
     if (isRecord(item.params)) data.params = sanitizeParams(item.params);
     node.data = data;
   } else if (type === "input-file") {
-    if (typeof item.path === "string") node.data = { path: item.path };
+    // 🔒 N-004: путь из НЕДОВЕРЕННОГО файла проекта (мог быть подменён) обезопашиваем
+    // тем же safePath, что и пути из диалогов — иначе путь с ведущим «-» ffmpeg примет
+    // за флаг при рендере (Rust safe_path закрывает только превью/probe, не args рендера).
+    if (typeof item.path === "string") node.data = { path: safePath(item.path) };
   }
   return node;
 }

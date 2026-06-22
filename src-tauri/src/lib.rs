@@ -22,7 +22,6 @@ pub fn run() {
             ffmpeg::cancel_render,
             projects::write_project_file,
             projects::read_project_file,
-            projects::path_exists,
             projects::write_preset,
             projects::read_preset,
             projects::list_presets,

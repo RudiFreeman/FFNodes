@@ -137,7 +137,8 @@ src-tauri/                # Rust: run_ffmpeg, probe_media, file pickers
 - **Защита пути от инъекции (N-004):** чистая `safe_path`(Rust)/`safePath`(TS) — путь с
   ведущим `-` префиксуется `./`, чтобы ffmpeg/ffprobe не приняли его за флаг. Rust — в
   `probe_media`/`extract_frame`/`extract_frame_complex` (каждый вход); фронт — к путям из
-  диалогов (для args рендера).
+  диалогов (для args рендера) И к путям входов из недоверенного файла проекта (`deserialize`,
+  Спринт 4) — иначе путь-«флаг» из подменённого `.ffvproj` стал бы опцией ffmpeg при рендере.
 - **Оценка размера файла (N-010 закрыт):** `size.ts` — `estimateSize` = (видео+аудио битрейт)
   ×длительность/8; операции корректируют `video_bitrate` в applyToInfo (scale/pad/fps ∝
   пикселям/fps; compress — от CRF; changeCodec — H.265×0.6/VP9×0.65; extract/remove_audio
@@ -179,13 +180,32 @@ src-tauri/                # Rust: run_ffmpeg, probe_media, file pickers
   результатов. Превью/predict: `predictOutput(…, outputNodeId)` по ветке конкретного выхода
   (каждая выходная нода показывает СВОИ характеристики, N-017), вкладки выходов в PreviewPanel +
   кадр «После» выбранного выхода (`previewPlan(…, outputNodeId)`). Спринт 3 закрыт.
+- **Спринт 4 — сохранение/загрузка проекта + пресеты:** всё состояние холста → файл `.ffvproj`
+  (JSON, версионируемая схема — поле `version`) и обратно. Чистый модуль `shared/lib/project/`:
+  `serializeProject` (React Flow nodes/edges → файл, выдёргивает ТОЛЬКО сохраняемые поля: тип,
+  позиция, deletable, params/filterId, путь доп. входа, targetHandle merge; рантайм-колбэки/
+  info/invalid НЕ пишем), `deserializeProject` (встречная, строгая валидация формы/версии —
+  чужой/битый/будущий → `ProjectFormatError`, мусор внутри → warning не краш). Tauri:
+  `projects.rs` write/read проекта (путь из диалога), `useProject` (serialize→write /
+  read→deserialize→`useGraph.loadGraph`+восстановление входа через useInputFile.loadPath),
+  кнопки Открыть/Сохранить + имя проекта в TopBar. Пути АБСОЛЮТНЫЕ; пропавший вход не роняет
+  (ffprobe-ошибка показывается). **Пресеты** (`preset.ts`): настройки ОДНОЙ выходной ветки
+  (операции+params, без файла) — `extractBranch` (вверх по входящим, слияние/merge→null),
+  `applyPreset` (вставка цепочки в ветку выбранного выхода, проверяет существование выхода —
+  async-гонка), `usePresets`+`PresetBar` в каталоге, хранятся `.json` в app-config/presets.
+  **Последние проекты** (`useRecentProjects`, `recent.json` app-config, 10 шт): выпадашка
+  «Недавние» в TopBar (задел под приветственное окно). 🔒 safePath к путям из недоверенного
+  файла (N-004, в deserialize); `sanitize_file_stem` (Rust) режет path traversal в именах
+  пресетов; `loadGraph` принудительно держит инвариант «основной вход/выход неудаляемы».
+  Спринт 4 закрыт.
 - **Открытый техдолг (CODE_NOTES):** N-019 (validateGraph не зовётся в filter_complex-путях —
   несочетаемые операции не блокируются для DAG/мульти-аутпута), N-020 (af-фильтры теряются в
   filter_complex), N-021 (дубль планировщиков build + лишние topoSort). Закрыты: N-008, N-010,
   N-012, N-016, N-017, N-018.
-- **Следующий шаг:** сохранение/загрузка проекта + пресеты (следующий крупный пункт роадмапа,
-  естественно идёт за мульти-аутпутом — см. docs/IDEAS.md «Горячие»); видеоплеер с проигрыванием
-  до/после (нативный `<video>` не играет HEVC/Main 10); закрыть техдолг N-019/N-020/N-021.
+- **Следующий шаг:** приветственное окно (как в Cursor: Новый/Открыть проект + список последних —
+  база под него уже есть, см. Спринт 4 «Недавние»; см. docs/IDEAS.md «Горячие»); видеоплеер с
+  проигрыванием до/после (нативный `<video>` не играет HEVC/Main 10); закрыть техдолг
+  N-019/N-020/N-021.
 - **История завершённого — [CHANGELOG.md](CHANGELOG.md).**
 - **Ближайшие шаги — [docs/PRD.md](docs/PRD.md) §8.**
 

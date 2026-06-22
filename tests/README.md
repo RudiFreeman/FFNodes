@@ -29,8 +29,11 @@
 | Защита пути `safePath` (N-004): ведущий `-` → префикс ./; абсолютные/обычные/пустой не трогаем | `src/shared/lib/ffmpeg/safePath.test.ts` | 2 |
 | Отсев не-видео при drag&drop `isSupportedVideo`: все поддерживаемые расширения, регистронезависимость, не-видео/без расширения, точки в пути | `src/shared/lib/videoExtensions.test.ts` | 4 |
 | Подстановка выходных путей `substituteOutputs` (мульти-аутпут, Спринт 3): одиночный выход, N выходов по индексу, не трогает обычные аргументы | `src/features/run-render/substituteOutputs.test.ts` | 3 |
+| Сериализация проекта (Спринт 4) `serializeProject` + round-trip граф→JSON→граф: выдёргивает только сохраняемые поля (отбрасывает колбэки/info/invalid), путь доп. входа, targetHandle только когда есть; round-trip мульти-аутпут + merge с targetHandle | `src/shared/lib/project/serialize.test.ts` | 6 |
+| Десериализация проекта (Спринт 4) `deserializeProject`: версионирование (чужой/не-объект/будущая версия/нет version/битые nodes-edges→ошибка), устойчивость к мусору (нода без id/чужой тип/дубль id/ребро в никуда/кривой params/позиция→предупреждение, не краш), inputPath не строка→null; 🔒 N-004 пути из файла с ведущим «-»→safePath | `src/shared/lib/project/deserialize.test.ts` | 11 |
+| Пресеты (Спринт 4) `extractBranch`/`buildPreset`/`parsePreset`: линейная ветка по порядку, ветки мульти-аутпута раздельно, выход без фильтров→[], слияние/merge→null, не-выход→null; round-trip пресета, валидация (чужой/будущий формат→ошибка, кривые шаги/params отсеиваются) | `src/shared/lib/project/preset.test.ts` | 10 |
 
-**Фронт (Vitest): 228 ✅**
+**Фронт (Vitest): 254 ✅**
 
 ### Rust (`cargo test` в `src-tauri/`)
 
@@ -42,8 +45,9 @@
 | Сборка аргументов кадра DAG `build_frame_args_complex`: два входа (-ss к первому, два -i, filter_complex, map в скобках), map входа (N:v) без скобок, пустой filter_complex без флага | там же | 2 |
 | Чистка кадров `frames_to_cleanup`: окно последних N, в пределах keep→пусто, keep=0→все, пустой вход | там же | 4 |
 | Защита пути `safe_path` (N-004): ведущий `-` → префикс ./; абсолютные/обычные/пустой не трогаем | там же | 1 |
+| Файлы проекта (Спринт 4) `projects.rs`: write→read round-trip во temp, чтение отсутствующего→ошибка; 🔒 `sanitize_file_stem` режет path traversal (разделители/«..»→чистое имя, пусто→ошибка) | `src-tauri/src/projects.rs` (`#[cfg(test)]`) | 3 |
 
-**Rust: 16 ✅**
+**Rust: 19 ✅**
 
 ## 🔴 Нужно покрыть (по мере появления кода)
 
